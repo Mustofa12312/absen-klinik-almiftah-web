@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShieldAlert, Search, AlertTriangle, MapPin, Cpu, Fingerprint, RefreshCw } from 'lucide-react';
+import { ShieldAlert, Search, AlertTriangle, MapPin, Cpu, Fingerprint, RefreshCw, Download } from 'lucide-react';
 
 interface SecurityEvent {
   id: string;
@@ -39,13 +39,43 @@ export default function SecurityEvents() {
     return matchSearch && matchType;
   });
 
+  const exportCSV = () => {
+    const headers = ['ID', 'Waktu', 'Pegawai', 'ID Pegawai', 'Cabang', 'Jenis Pelanggaran', 'Metadata'];
+    const rows = filtered.map(ev => [
+      ev.id,
+      new Date(ev.createdAt).toLocaleString('id-ID'),
+      ev.employeeName,
+      ev.employeeId,
+      ev.branchId,
+      TYPE_CONFIG[ev.type].label,
+      JSON.stringify(ev.metadata || {}).replace(/"/g, '""')
+    ]);
+    
+    const csvContent = [headers, ...rows].map(row => `"${row.join('","')}"`).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `security_events_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Security Events</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Pantau percobaan pelanggaran: Fake GPS, Emulator, Device ilegal, dan lainnya (BR-06, BR-07, BR-22).
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Security Events</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Pantau percobaan pelanggaran: Fake GPS, Emulator, Device ilegal, dan lainnya (BR-06, BR-07, BR-22).
+          </p>
+        </div>
+        <button 
+          onClick={exportCSV}
+          className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+        >
+          <Download className="w-4 h-4" />
+          Export CSV
+        </button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">

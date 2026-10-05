@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ClipboardList, Search } from 'lucide-react';
+import { ClipboardList, Search, Download } from 'lucide-react';
 
 interface AuditLog {
   id: string;
@@ -43,13 +43,46 @@ export default function AuditLog() {
     l.action.toLowerCase().includes(search.toLowerCase())
   );
 
+  const exportCSV = () => {
+    const headers = ['ID', 'Waktu', 'Aksi', 'Pelaku', 'Role', 'Target Type', 'Target ID', 'Keterangan', 'Perubahan (Before)', 'Perubahan (After)'];
+    const rows = filtered.map(l => [
+      l.id,
+      new Date(l.createdAt).toLocaleString('id-ID'),
+      ACTION_LABELS[l.action] ?? l.action,
+      l.actorName,
+      l.actorRole,
+      l.targetType,
+      l.targetId,
+      l.description,
+      l.before ? JSON.stringify(l.before).replace(/"/g, '""') : '-',
+      l.after ? JSON.stringify(l.after).replace(/"/g, '""') : '-'
+    ]);
+    
+    const csvContent = [headers, ...rows].map(row => `"${row.join('","')}"`).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `audit_log_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Audit Log</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Rekaman seluruh tindakan administratif sensitif. Tidak dapat dihapus melalui UI (BR-22, PRD-39).
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Audit Log</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Rekaman seluruh tindakan administratif sensitif. Tidak dapat dihapus melalui UI (BR-22, PRD-39).
+          </p>
+        </div>
+        <button 
+          onClick={exportCSV}
+          className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+        >
+          <Download className="w-4 h-4" />
+          Export CSV
+        </button>
       </div>
 
       <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">

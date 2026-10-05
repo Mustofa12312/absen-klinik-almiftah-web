@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Clock, Search, Edit2, AlertCircle } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Plus, Clock, Search, Edit2, AlertCircle, Upload } from 'lucide-react';
 
 interface Shift {
   id: string;
@@ -17,7 +17,16 @@ const DUMMY_SHIFTS: Shift[] = [
 ];
 
 export default function Shifts() {
-  const [shifts] = useState<Shift[]>(DUMMY_SHIFTS);
+  const [shifts, setShifts] = useState<Shift[]>(DUMMY_SHIFTS);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      alert(`Berhasil mensimulasikan import file: ${file.name}`);
+      event.target.value = '';
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -26,10 +35,26 @@ export default function Shifts() {
           <h1 className="text-2xl font-semibold text-gray-900">Manajemen Shift</h1>
           <p className="mt-1 text-sm text-gray-500">Kelola jadwal shift kerja dan batas toleransi absensi.</p>
         </div>
-        <button className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors">
-          <Plus className="w-4 h-4 mr-2" />
-          Tambah Shift
-        </button>
+        <div className="flex gap-2">
+          <input 
+            type="file" 
+            accept=".csv, .xlsx" 
+            className="hidden" 
+            ref={fileInputRef} 
+            onChange={handleImportCSV} 
+          />
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Import CSV
+          </button>
+          <button className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors">
+            <Plus className="w-4 h-4 mr-2" />
+            Tambah Shift
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -45,6 +45,30 @@ export default function AttendanceMonitoring() {
     return matchSearch && matchStatus;
   });
 
+  const exportCSV = () => {
+    const headers = ['Pegawai', 'ID Pegawai', 'Cabang', 'Shift', 'Tanggal', 'Masuk', 'Pulang', 'Status', 'Terlambat (mnt)', 'Pulang Cepat (mnt)'];
+    const rows = filtered.map(r => [
+      r.employeeName,
+      r.employeeId,
+      r.branchId,
+      r.shiftName,
+      r.workDate,
+      r.checkInTime || '-',
+      r.checkOutTime || '-',
+      STATUS_CONFIG[r.status].label,
+      r.lateMinutes || 0,
+      r.earlyCheckoutMinutes || 0
+    ]);
+    
+    const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `monitoring_absensi_${filterDate}.csv`;
+    link.click();
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -52,7 +76,10 @@ export default function AttendanceMonitoring() {
           <h1 className="text-2xl font-semibold text-gray-900">Monitoring Absensi</h1>
           <p className="mt-1 text-sm text-gray-500">Pantau status kehadiran pegawai per hari dan per cabang (PRD-34).</p>
         </div>
-        <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+        <button 
+          onClick={exportCSV}
+          className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+        >
           <Download className="w-4 h-4" />
           Export CSV
         </button>

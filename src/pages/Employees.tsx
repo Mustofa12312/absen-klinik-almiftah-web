@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Search, Smartphone, ShieldAlert, Edit2, MoreVertical, ShieldCheck } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Plus, Search, Smartphone, ShieldAlert, Edit2, MoreVertical, ShieldCheck, Upload } from 'lucide-react';
 
 interface Employee {
   id: string;
@@ -19,8 +19,19 @@ const DUMMY_EMPLOYEES: Employee[] = [
 ];
 
 export default function Employees() {
-  const [employees] = useState<Employee[]>(DUMMY_EMPLOYEES);
+  const [employees, setEmployees] = useState<Employee[]>(DUMMY_EMPLOYEES);
   const [search, setSearch] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // In a real app, parse the CSV and send to server.
+      // For now, just show a success message.
+      alert(`Berhasil mensimulasikan import file: ${file.name}`);
+      event.target.value = ''; // reset
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -29,10 +40,26 @@ export default function Employees() {
           <h1 className="text-2xl font-semibold text-gray-900">Manajemen Pegawai</h1>
           <p className="mt-1 text-sm text-gray-500">Kelola data pegawai, status aktif, dan Device Binding.</p>
         </div>
-        <button className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors">
-          <Plus className="w-4 h-4 mr-2" />
-          Tambah Pegawai
-        </button>
+        <div className="flex gap-2">
+          <input 
+            type="file" 
+            accept=".csv, .xlsx" 
+            className="hidden" 
+            ref={fileInputRef} 
+            onChange={handleImportCSV} 
+          />
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Import CSV
+          </button>
+          <button className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors">
+            <Plus className="w-4 h-4 mr-2" />
+            Tambah Pegawai
+          </button>
+        </div>
       </div>
 
       <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
