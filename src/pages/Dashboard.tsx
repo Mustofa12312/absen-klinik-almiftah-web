@@ -2,7 +2,7 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, MapPin, Clock, Calendar, ShieldAlert,
   LogOut, Building2, FileCheck2, Menu, Smartphone, ClipboardList,
-  Activity, AlertCircle, CheckCircle2, UserX, Stethoscope
+  Activity, AlertCircle, CheckCircle2, UserX, Stethoscope, BarChart2
 } from 'lucide-react';
 
 import Branches from './Branches';
@@ -14,6 +14,8 @@ import SecurityEvents from './SecurityEvents';
 import AuditLog from './AuditLog';
 import DeviceManagement from './DeviceManagement';
 import AttendanceMonitoring from './AttendanceMonitoring';
+import LocationSettings from './LocationSettings';
+import ReportPage from './ReportPage';
 
 export default function Dashboard() {
   const location = useLocation();
@@ -23,9 +25,11 @@ export default function Dashboard() {
     { name: 'Monitoring Absensi',  icon: Activity,        path: '/dashboard/attendance' },
     { name: 'Manajemen Cabang',    icon: Building2,       path: '/dashboard/branches' },
     { name: 'Pegawai',             icon: Users,           path: '/dashboard/employees' },
+    { name: 'Lokasi Absensi',      icon: MapPin,          path: '/dashboard/locations' },
     { name: 'Jadwal Shift',        icon: Clock,           path: '/dashboard/shifts' },
     { name: 'Hari Libur',          icon: Calendar,        path: '/dashboard/holidays' },
     { name: 'Pengajuan & Koreksi', icon: FileCheck2,      path: '/dashboard/requests' },
+    { name: 'Rekap & Laporan',     icon: BarChart2,       path: '/dashboard/reports' },
     { name: 'Device Management',   icon: Smartphone,      path: '/dashboard/devices' },
     { name: 'Security Events',     icon: ShieldAlert,     path: '/dashboard/security' },
     { name: 'Audit Log',           icon: ClipboardList,   path: '/dashboard/audit' },
@@ -101,9 +105,11 @@ export default function Dashboard() {
             <Route path="/attendance" element={<AttendanceMonitoring />} />
             <Route path="/branches"   element={<Branches />} />
             <Route path="/employees"  element={<Employees />} />
+            <Route path="/locations"  element={<LocationSettings />} />
             <Route path="/shifts"     element={<Shifts />} />
             <Route path="/holidays"   element={<Holidays />} />
             <Route path="/requests"   element={<Requests />} />
+            <Route path="/reports"    element={<ReportPage />} />
             <Route path="/devices"    element={<DeviceManagement />} />
             <Route path="/security"   element={<SecurityEvents />} />
             <Route path="/audit"      element={<AuditLog />} />
