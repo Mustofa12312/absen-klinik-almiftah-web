@@ -1,33 +1,34 @@
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { 
-  LayoutDashboard, 
-  Users, 
-  MapPin, 
-  Clock, 
-  Calendar, 
-  ShieldAlert,
-  LogOut,
-  Building2,
-  FileCheck2,
-  Menu
+  LayoutDashboard, Users, MapPin, Clock, Calendar, ShieldAlert,
+  LogOut, Building2, FileCheck2, Menu, Smartphone, ClipboardList,
+  Activity, AlertCircle, CheckCircle2, UserX, Stethoscope
 } from 'lucide-react';
 
 import Branches from './Branches';
 import Employees from './Employees';
 import Shifts from './Shifts';
 import Requests from './Requests';
+import Holidays from './Holidays';
+import SecurityEvents from './SecurityEvents';
+import AuditLog from './AuditLog';
+import DeviceManagement from './DeviceManagement';
+import AttendanceMonitoring from './AttendanceMonitoring';
 
 export default function Dashboard() {
   const location = useLocation();
 
   const navItems = [
-    { name: 'Ringkasan', icon: LayoutDashboard, path: '/dashboard' },
-    { name: 'Manajemen Cabang', icon: Building2, path: '/dashboard/branches' },
-    { name: 'Pegawai', icon: Users, path: '/dashboard/employees' },
-    { name: 'Jadwal Shift', icon: Clock, path: '/dashboard/shifts' },
-    { name: 'Pengajuan', icon: FileCheck2, path: '/dashboard/requests' },
-    { name: 'Hari Libur', icon: Calendar, path: '/dashboard/holidays' },
-    { name: 'Keamanan (Fraud)', icon: ShieldAlert, path: '/dashboard/security' },
+    { name: 'Ringkasan',           icon: LayoutDashboard, path: '/dashboard' },
+    { name: 'Monitoring Absensi',  icon: Activity,        path: '/dashboard/attendance' },
+    { name: 'Manajemen Cabang',    icon: Building2,       path: '/dashboard/branches' },
+    { name: 'Pegawai',             icon: Users,           path: '/dashboard/employees' },
+    { name: 'Jadwal Shift',        icon: Clock,           path: '/dashboard/shifts' },
+    { name: 'Hari Libur',          icon: Calendar,        path: '/dashboard/holidays' },
+    { name: 'Pengajuan & Koreksi', icon: FileCheck2,      path: '/dashboard/requests' },
+    { name: 'Device Management',   icon: Smartphone,      path: '/dashboard/devices' },
+    { name: 'Security Events',     icon: ShieldAlert,     path: '/dashboard/security' },
+    { name: 'Audit Log',           icon: ClipboardList,   path: '/dashboard/audit' },
   ];
 
   return (
@@ -45,7 +46,7 @@ export default function Dashboard() {
 
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
           {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
             const Icon = item.icon;
             return (
               <Link
@@ -86,7 +87,7 @@ export default function Dashboard() {
               <span className="text-sm text-gray-700">Super Admin</span>
               <img
                 className="h-8 w-8 rounded-full bg-gray-200"
-                src="https://ui-avatars.com/api/?name=Super+Admin&background=0D8ABC&color=fff"
+                src="https://ui-avatars.com/api/?name=Super+Admin&background=138D5B&color=fff"
                 alt=""
               />
             </div>
@@ -96,12 +97,16 @@ export default function Dashboard() {
         {/* Page Content */}
         <div className="flex-1 overflow-y-auto bg-gray-50/50 p-6">
           <Routes>
-            <Route path="/" element={<Overview />} />
-            <Route path="/branches" element={<Branches />} />
-            <Route path="/employees" element={<Employees />} />
-            <Route path="/shifts" element={<Shifts />} />
-            <Route path="/requests" element={<Requests />} />
-            {/* Other routes will go here */}
+            <Route path="/"           element={<Overview />} />
+            <Route path="/attendance" element={<AttendanceMonitoring />} />
+            <Route path="/branches"   element={<Branches />} />
+            <Route path="/employees"  element={<Employees />} />
+            <Route path="/shifts"     element={<Shifts />} />
+            <Route path="/holidays"   element={<Holidays />} />
+            <Route path="/requests"   element={<Requests />} />
+            <Route path="/devices"    element={<DeviceManagement />} />
+            <Route path="/security"   element={<SecurityEvents />} />
+            <Route path="/audit"      element={<AuditLog />} />
           </Routes>
         </div>
       </main>
@@ -109,34 +114,53 @@ export default function Dashboard() {
   );
 }
 
-// Temporary Overview Component
+// Overview dengan 11 KPI sesuai PRD Bab 61
 function Overview() {
+  const stats = [
+    { title: 'Total Pegawai',    value: '86',  subtitle: '3 Cabang aktif',                 icon: Users,         color: 'text-blue-600',   bg: 'bg-blue-50' },
+    { title: 'Hadir Hari Ini',   value: '71',  subtitle: 'Tepat waktu & hadir',            icon: CheckCircle2,  color: 'text-green-600',  bg: 'bg-green-50' },
+    { title: 'Terlambat',        value: '8',   subtitle: 'Melebihi toleransi shift',       icon: Clock,         color: 'text-yellow-600', bg: 'bg-yellow-50' },
+    { title: 'Belum Absen',      value: '7',   subtitle: 'Perlu dipantau',                 icon: AlertCircle,   color: 'text-orange-600', bg: 'bg-orange-50' },
+    { title: 'Izin',             value: '2',   subtitle: 'Disetujui hari ini',             icon: FileCheck2,    color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { title: 'Sakit',            value: '1',   subtitle: 'Dengan surat dokter',            icon: Stethoscope,   color: 'text-purple-600', bg: 'bg-purple-50' },
+    { title: 'Cuti',             value: '3',   subtitle: 'Periode berjalan',               icon: Calendar,      color: 'text-sky-600',    bg: 'bg-sky-50' },
+    { title: 'Dinas',            value: '1',   subtitle: 'Tugas luar klinik',              icon: MapPin,        color: 'text-teal-600',   bg: 'bg-teal-50' },
+    { title: 'Pegawai Nonaktif', value: '2',   subtitle: 'Tidak perlu diabsenkan',         icon: UserX,         color: 'text-gray-500',   bg: 'bg-gray-100' },
+    { title: 'Security Events',  value: '2',   subtitle: 'Fake GPS terdeteksi',            icon: ShieldAlert,   color: 'text-red-600',    bg: 'bg-red-50',   warning: true },
+    { title: 'Koreksi Pending',  value: '4',   subtitle: 'Menunggu persetujuan admin',     icon: ClipboardList, color: 'text-amber-600',  bg: 'bg-amber-50', warning: true },
+  ];
+
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Ringkasan Hari Ini</h1>
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Pegawai" value="124" subtitle="3 Cabang" />
-        <StatCard title="Hadir Tepat Waktu" value="98" subtitle="Hari ini" />
-        <StatCard title="Pengajuan Izin/Cuti" value="5" subtitle="Menunggu persetujuan" />
-        <StatCard title="Security Events" value="2" subtitle="Fake GPS terdeteksi" warning />
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Ringkasan Hari Ini</h1>
+          <p className="text-sm text-gray-500 mt-1">Senin, 05 Oktober 2026 — Semua Cabang</p>
+        </div>
+        <select className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary">
+          <option>Semua Cabang</option>
+          <option>HQ-01 Pusat</option>
+          <option>BR-02 Selatan</option>
+        </select>
       </div>
-    </div>
-  );
-}
-
-function StatCard({ title, value, subtitle, warning = false }: { title: string, value: string, subtitle: string, warning?: boolean }) {
-  return (
-    <div className={`bg-white overflow-hidden shadow-sm rounded-xl border ${warning ? 'border-red-200' : 'border-gray-200'}`}>
-      <div className="p-5">
-        <div className="flex items-center">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-gray-500 truncate">{title}</p>
-            <p className={`mt-1 text-3xl font-semibold ${warning ? 'text-red-600' : 'text-gray-900'}`}>{value}</p>
-          </div>
-        </div>
-        <div className="mt-4">
-          <span className={`text-sm ${warning ? 'text-red-500' : 'text-gray-500'}`}>{subtitle}</span>
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div key={stat.title} className={`bg-white overflow-hidden shadow-sm rounded-xl border ${stat.warning ? 'border-red-200' : 'border-gray-200'} hover:shadow-md transition-shadow`}>
+              <div className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${stat.bg}`}>
+                    <Icon className={`h-5 w-5 ${stat.color}`} />
+                  </div>
+                  <span className={`text-3xl font-bold ${stat.warning ? 'text-red-600' : 'text-gray-900'}`}>{stat.value}</span>
+                </div>
+                <p className="text-sm font-medium text-gray-700">{stat.title}</p>
+                <p className={`text-xs mt-0.5 ${stat.warning ? 'text-red-400' : 'text-gray-400'}`}>{stat.subtitle}</p>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
