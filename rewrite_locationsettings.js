@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+const fs = require('fs');
+
+const code = `import { useState, useEffect } from 'react';
 import { MapPin, Search, Edit2, Plus, MoreVertical, X } from 'lucide-react';
-import { AdminServices } from '../lib/services';
-import type { Branch } from '../lib/services';
+import { AdminServices, Branch } from '../lib/services';
 
 export default function LocationSettings() {
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -144,7 +145,7 @@ export default function LocationSettings() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${loc.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      <span className={\`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium \${loc.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}\`}>
                         {loc.status === 'active' ? 'Aktif' : 'Nonaktif'}
                       </span>
                     </td>
@@ -219,3 +220,5 @@ export default function LocationSettings() {
     </div>
   );
 }
+`;
+fs.writeFileSync('src/pages/LocationSettings.tsx', code);
