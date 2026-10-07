@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Plus, Clock, Search, Edit2, AlertCircle, Upload } from 'lucide-react';
+import { Plus, Clock, Edit2, AlertCircle, Upload } from 'lucide-react';
 
 interface Shift {
   id: string;
@@ -17,7 +17,7 @@ const DUMMY_SHIFTS: Shift[] = [
 ];
 
 export default function Shifts() {
-  const [shifts, setShifts] = useState<Shift[]>(DUMMY_SHIFTS);
+  const [shifts] = useState<Shift[]>(DUMMY_SHIFTS);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {

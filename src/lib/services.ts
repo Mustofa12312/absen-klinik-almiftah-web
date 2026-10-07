@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, updateDoc, query, where, addDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 
 // Interfaces
@@ -8,6 +8,9 @@ export interface Branch {
   code: string;
   address: string;
   radius: number;
+  latitude?: number;
+  longitude?: number;
+  maxAccuracyMeters?: number;
   status: 'active' | 'inactive';
 }
 
@@ -40,6 +43,16 @@ export const AdminServices = {
       await updateDoc(branchRef, { radius: newRadius });
     } catch (error) {
       console.error("Gagal update radius cabang:", error);
+      throw error;
+    }
+  },
+
+  async updateBranchLocation(branchId: string, data: { latitude: number, longitude: number, radius: number, maxAccuracyMeters: number }): Promise<void> {
+    try {
+      const branchRef = doc(db, 'branches', branchId);
+      await updateDoc(branchRef, data);
+    } catch (error) {
+      console.error("Gagal update lokasi cabang:", error);
       throw error;
     }
   },

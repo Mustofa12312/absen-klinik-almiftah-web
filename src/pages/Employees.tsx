@@ -19,7 +19,7 @@ const DUMMY_EMPLOYEES: Employee[] = [
 ];
 
 export default function Employees() {
-  const [employees, setEmployees] = useState<Employee[]>(DUMMY_EMPLOYEES);
+  const [employees] = useState<Employee[]>(DUMMY_EMPLOYEES);
   const [search, setSearch] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
