@@ -1,17 +1,18 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
-  // TODO: Add actual Firebase config from Firebase Console
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "dummy-api-key",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "dummy-auth-domain",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "dummy-project-id",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "dummy-storage-bucket",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "dummy-sender-id",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "dummy-app-id"
+  apiKey: "AIzaSyAKPNHGfP9YtT8Z9I-1tKXzt7QCoMRtRD0",
+  authDomain: "klinik-almiftah.firebaseapp.com",
+  projectId: "klinik-almiftah",
+  storageBucket: "klinik-almiftah.firebasestorage.app",
+  messagingSenderId: "664022797316",
+  appId: "1:664022797316:web:eb378574e2469f8b6c7951",
+  measurementId: "G-VX7WG5S3M6"
 };
-
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const analytics = getAnalytics(app);
