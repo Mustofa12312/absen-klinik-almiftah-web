@@ -1,4 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { Plus, Clock, Edit2, AlertCircle, Upload } from 'lucide-react';
 
 interface Shift {
@@ -10,14 +12,36 @@ interface Shift {
   crossesMidnight: boolean;
 }
 
-const DUMMY_SHIFTS: Shift[] = [
-  { id: '1', name: 'Shift Pagi', startTime: '08:00', endTime: '14:00', tolerance: 15, crossesMidnight: false },
-  { id: '2', name: 'Shift Siang', startTime: '14:00', endTime: '22:00', tolerance: 15, crossesMidnight: false },
-  { id: '3', name: 'Shift Malam', startTime: '22:00', endTime: '08:00', tolerance: 15, crossesMidnight: true },
-];
-
 export default function Shifts() {
-  const [shifts] = useState<Shift[]>(DUMMY_SHIFTS);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  useEffect(() => {
+    const fetchShifts = async () => {
+      setLoading(true);
+      try {
+        const snap = await getDocs(collection(db, 'shifts'));
+        const data: Shift[] = [];
+        snap.forEach(doc => {
+          const d = doc.data();
+          data.push({
+            id: doc.id,
+            name: d.name || 'Unknown',
+            startTime: d.startTime || '00:00',
+            endTime: d.endTime || '00:00',
+            tolerance: d.tolerance ?? 15,
+            crossesMidnight: d.crossesMidnight || false,
+          });
+        });
+        setShifts(data);
+      } catch(e) {
+        console.error("Error fetching shifts:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchShifts();
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,7 +82,11 @@ export default function Shifts() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {shifts.map((shift) => (
+        {loading ? (
+          <div className="col-span-full py-12 text-center text-sm text-gray-400">Memuat data shift...</div>
+        ) : shifts.length === 0 ? (
+          <div className="col-span-full py-12 text-center text-sm text-gray-400">Tidak ada data shift.</div>
+        ) : shifts.map((shift) => (
           <div key={shift.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col transition-all hover:shadow-md">
             <div className="p-5 flex-1">
               <div className="flex justify-between items-start mb-4">
