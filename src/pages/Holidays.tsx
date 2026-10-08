@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { Plus, Search, MoreVertical, Edit2, Calendar, Ban } from 'lucide-react';
 
 interface Holiday {
@@ -10,15 +12,37 @@ interface Holiday {
   isActive: boolean;
 }
 
-const DUMMY_HOLIDAYS: Holiday[] = [
-  { id: '1', date: '2026-10-12', name: 'Libur Klinik', description: 'Hari libur klinik seluruh cabang', scope: 'all_branches', isActive: true },
-  { id: '2', date: '2026-12-25', name: 'Natal', description: 'Hari Raya Natal', scope: 'all_branches', isActive: true },
-  { id: '3', date: '2026-10-20', name: 'Rapat Tahunan', description: 'Rapat tahunan Cabang Pusat', scope: 'branch_hq01', isActive: true },
-];
-
 export default function Holidays() {
-  const [holidays] = useState<Holiday[]>(DUMMY_HOLIDAYS);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchHolidays = async () => {
+      setLoading(true);
+      try {
+        const snap = await getDocs(collection(db, 'holidays'));
+        const data: Holiday[] = [];
+        snap.forEach(doc => {
+          const d = doc.data();
+          data.push({
+            id: doc.id,
+            date: d.date || '-',
+            name: d.name || 'Unknown',
+            description: d.description || '-',
+            scope: d.scope || 'all_branches',
+            isActive: d.isActive !== false,
+          });
+        });
+        setHolidays(data);
+      } catch(e) {
+        console.error("Error fetching holidays:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchHolidays();
+  }, []);
 
   const filtered = holidays.filter(h =>
     h.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -63,7 +87,11 @@ export default function Holidays() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filtered.map((h) => (
+              {loading ? (
+                <tr><td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-400">Memuat hari libur...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-400">Tidak ada hari libur.</td></tr>
+              ) : filtered.map((h) => (
                 <tr key={h.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">

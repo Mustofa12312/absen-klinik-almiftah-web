@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { Plus, Search, MapPin, MoreVertical, Edit2, Ban } from 'lucide-react';
 
 interface Branch {
@@ -10,15 +12,37 @@ interface Branch {
   status: 'active' | 'inactive';
 }
 
-const DUMMY_BRANCHES: Branch[] = [
-  { id: '1', name: 'Klinik Al-Miftah Pusat', code: 'HQ-01', address: 'Jl. Merdeka No. 1, Jakarta', radius: 100, status: 'active' },
-  { id: '2', name: 'Klinik Al-Miftah Cabang Selatan', code: 'BR-02', address: 'Jl. Sudirman No. 45, Jakarta', radius: 50, status: 'active' },
-  { id: '3', name: 'Klinik Al-Miftah Cabang Timur', code: 'BR-03', address: 'Jl. Pramuka No. 12, Jakarta', radius: 150, status: 'inactive' },
-];
-
 export default function Branches() {
-  const [branches] = useState<Branch[]>(DUMMY_BRANCHES);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchBranches = async () => {
+      setLoading(true);
+      try {
+        const snap = await getDocs(collection(db, 'branches'));
+        const data: Branch[] = [];
+        snap.forEach(doc => {
+          const d = doc.data();
+          data.push({
+            id: doc.id,
+            name: d.name || 'Unknown',
+            code: d.code || doc.id,
+            address: d.address || '-',
+            radius: d.radius || 100,
+            status: d.isActive === false ? 'inactive' : 'active',
+          });
+        });
+        setBranches(data);
+      } catch(e) {
+        console.error("Error fetching branches:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchBranches();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -68,7 +92,11 @@ export default function Branches() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {branches.map((branch) => (
+              {loading ? (
+                 <tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-400">Memuat data cabang...</td></tr>
+              ) : branches.length === 0 ? (
+                 <tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-400">Tidak ada data cabang.</td></tr>
+              ) : branches.map((branch) => (
                 <tr key={branch.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
