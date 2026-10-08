@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Filter, Download, Search } from 'lucide-react';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface AttendanceRecord {
   id: string;
@@ -26,18 +28,102 @@ const STATUS_CONFIG: Record<AttendanceRecord['status'], { label: string; color: 
   early_checkout:{ label: 'Pulang Cepat',  color: 'bg-amber-100 text-amber-800' },
 };
 
-const DUMMY_ATTENDANCE: AttendanceRecord[] = [
-  { id: '1', employeeName: 'Ahmad Fauzan', employeeId: 'EMP001', branchId: 'HQ-01', shiftName: 'Shift Pagi', workDate: '2026-10-05', checkInTime: '07:56', checkOutTime: '14:03', status: 'present', lateMinutes: 0 },
-  { id: '2', employeeName: 'Siti Aminah',  employeeId: 'EMP002', branchId: 'BR-02', shiftName: 'Shift Pagi', workDate: '2026-10-05', checkInTime: '08:22', checkOutTime: '14:00', status: 'late', lateMinutes: 22 },
-  { id: '3', employeeName: 'Budi Santoso', employeeId: 'EMP003', branchId: 'HQ-01', shiftName: 'Shift Pagi', workDate: '2026-10-05', status: 'absent' },
-  { id: '4', employeeName: 'Diana Fitri',  employeeId: 'EMP004', branchId: 'BR-02', shiftName: 'Shift Siang', workDate: '2026-10-05', checkInTime: '14:05', checkOutTime: '20:30', status: 'early_checkout', earlyCheckoutMinutes: 90 },
-];
-
 export default function AttendanceMonitoring() {
-  const [records] = useState<AttendanceRecord[]>(DUMMY_ATTENDANCE);
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('');
-  const [filterDate, setFilterDate] = useState('2026-10-05');
+  
+  const today = new Date();
+  const defaultDate = `${today.getFullYear()}-${(today.getMonth()+1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+  const [filterDate, setFilterDate] = useState(defaultDate);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // Fetch all employees to map IDs to Names
+        const empSnap = await getDocs(collection(db, 'employees'));
+        const empMap: Record<string, any> = {};
+        empSnap.forEach(doc => {
+          empMap[doc.id] = doc.data();
+        });
+
+        // Fetch attendance for selected date
+        const attQuery = query(collection(db, 'attendance'), where('workDate', '==', filterDate));
+        const attSnap = await getDocs(attQuery);
+        
+        const data: AttendanceRecord[] = [];
+        attSnap.forEach(doc => {
+          const d = doc.data();
+          const emp = empMap[d.employeeId] || {};
+          
+          let checkInStr = undefined;
+          if (d.checkIn && d.checkIn.timestamp) {
+            const date = d.checkIn.timestamp.toDate ? d.checkIn.timestamp.toDate() : new Date(d.checkIn.timestamp);
+            checkInStr = date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+          }
+          
+          let checkOutStr = undefined;
+          if (d.checkOut && d.checkOut.timestamp) {
+            const date = d.checkOut.timestamp.toDate ? d.checkOut.timestamp.toDate() : new Date(d.checkOut.timestamp);
+            checkOutStr = date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+          }
+
+          let status = d.status || 'present';
+          if (d.lateMinutes > 0) status = 'late';
+          
+          data.push({
+            id: doc.id,
+            employeeName: emp.name || d.employeeName || 'Unknown Employee',
+            employeeId: emp.employeeId || d.employeeId || '-',
+            branchId: d.branchId || '-',
+            shiftName: d.shiftId || 'Shift Default',
+            workDate: d.workDate,
+            checkInTime: checkInStr,
+            checkOutTime: checkOutStr,
+            status: status,
+            lateMinutes: d.lateMinutes || 0,
+            earlyCheckoutMinutes: d.earlyCheckoutMinutes || 0,
+          });
+        });
+
+        // Also fetch leave requests approved for this date that are NOT in attendance
+        const leaveSnap = await getDocs(collection(db, 'leave_requests'));
+        leaveSnap.forEach(doc => {
+          const d = doc.data();
+          if (d.status === 'APPROVED' && (d.date === filterDate || d.startDate === filterDate)) {
+             // check if not already in attendance
+             if (!data.find(a => a.employeeId === d.employeeId)) {
+                const emp = empMap[d.employeeId] || {};
+                let status = 'permission';
+                if (d.type === 'Sakit') status = 'sick';
+                else if (d.type === 'Cuti') status = 'leave';
+                else if (d.type === 'Dinas') status = 'business_trip';
+                
+                data.push({
+                  id: doc.id,
+                  employeeName: d.employeeName || emp.name || 'Unknown Employee',
+                  employeeId: d.employeeId || emp.employeeId || '-',
+                  branchId: emp.branchId || '-',
+                  shiftName: '-',
+                  workDate: filterDate,
+                  status: status as any,
+                });
+             }
+          }
+        });
+
+        setRecords(data);
+      } catch (e) {
+        console.error("Error fetching monitoring data:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    if (filterDate) fetchData();
+  }, [filterDate]);
 
   const filtered = records.filter(r => {
     const matchSearch = r.employeeName.toLowerCase().includes(search.toLowerCase());
@@ -130,8 +216,10 @@ export default function AttendanceMonitoring() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-12 text-center text-sm text-gray-400">Tidak ada data absensi.</td></tr>
+              {loading ? (
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-sm text-gray-400">Memuat data absensi...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-sm text-gray-400">Tidak ada data absensi untuk tanggal ini.</td></tr>
               ) : filtered.map((rec) => {
                 const statusCfg = STATUS_CONFIG[rec.status];
                 return (
