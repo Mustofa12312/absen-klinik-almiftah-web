@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { Smartphone, Search, RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 interface Device {
@@ -15,19 +17,57 @@ interface Device {
   lastSeenAt: string;
 }
 
-const DUMMY_DEVICES: Device[] = [
-  { id: '1', employeeId: 'EMP001', employeeName: 'Ahmad Fauzan',   deviceId: 'abc123def456', manufacturer: 'Samsung',  model: 'SM-A155F', androidVersion: '14', appVersion: '1.0.0', isActive: true, registeredAt: '2026-09-01T08:00:00Z', lastSeenAt: '2026-10-05T08:15:00Z' },
-  { id: '2', employeeId: 'EMP002', employeeName: 'Siti Aminah',    deviceId: 'iph13pro7890', manufacturer: 'Apple',    model: 'iPhone 13', androidVersion: 'iOS 17', appVersion: '1.0.0', isActive: true, registeredAt: '2026-09-02T09:00:00Z', lastSeenAt: '2026-10-05T07:50:00Z' },
-  { id: '3', employeeId: 'EMP004', employeeName: 'Diana Fitri',    deviceId: 'opporeno8xyz', manufacturer: 'Oppo',     model: 'Reno 8', androidVersion: '13', appVersion: '1.0.0', isActive: false, registeredAt: '2026-09-10T10:00:00Z', lastSeenAt: '2026-10-02T14:00:00Z' },
-];
-
 export default function DeviceManagement() {
-  const [devices, setDevices] = useState<Device[]>(DUMMY_DEVICES);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
 
-  const handleReset = (deviceId: string, empName: string) => {
+  useEffect(() => {
+    const fetchDevices = async () => {
+      setLoading(true);
+      try {
+        const empSnap = await getDocs(collection(db, 'employees'));
+        const empMap: Record<string, any> = {};
+        empSnap.forEach(doc => { empMap[doc.id] = doc.data(); });
+
+        const snap = await getDocs(collection(db, 'devices'));
+        const data: Device[] = [];
+        snap.forEach(doc => {
+          const d = doc.data();
+          const emp = empMap[d.employeeId] || {};
+          data.push({
+            id: doc.id,
+            employeeId: d.employeeId || '-',
+            employeeName: emp.name || d.employeeName || 'Unknown',
+            deviceId: d.deviceId || '-',
+            manufacturer: d.manufacturer || d.brand || 'Unknown',
+            model: d.model || 'Unknown',
+            androidVersion: d.osVersion || d.androidVersion || '-',
+            appVersion: d.appVersion || '1.0.0',
+            isActive: d.isActive !== false,
+            registeredAt: d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate().toISOString() : d.createdAt) : new Date().toISOString(),
+            lastSeenAt: d.lastSeen ? (d.lastSeen.toDate ? d.lastSeen.toDate().toISOString() : d.lastSeen) : new Date().toISOString(),
+          });
+        });
+        setDevices(data);
+      } catch(e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDevices();
+  }, []);
+
+  const handleReset = async (deviceId: string, empName: string, docId: string) => {
     if (window.confirm(`Reset device binding untuk ${empName}? Pegawai perlu mendaftar ulang perangkat.`)) {
-      setDevices(prev => prev.map(d => d.id === deviceId ? { ...d, isActive: false } : d));
+      try {
+        await updateDoc(doc(db, 'devices', docId), { isActive: false });
+        setDevices(prev => prev.map(d => d.id === docId ? { ...d, isActive: false } : d));
+      } catch(e) {
+        console.error(e);
+        alert('Gagal mereset perangkat');
+      }
     }
   };
 

@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { ShieldAlert, Search, AlertTriangle, MapPin, Cpu, Fingerprint, RefreshCw, Download } from 'lucide-react';
 
 interface SecurityEvent {
@@ -22,16 +24,46 @@ const TYPE_CONFIG: Record<SecurityEvent['type'], { label: string; color: string;
   unauthorized_access:  { label: 'Akses Tidak Sah',   color: 'text-red-700 bg-red-50 border-red-200',      icon: ShieldAlert },
 };
 
-const DUMMY_EVENTS: SecurityEvent[] = [
-  { id: '1', employeeId: 'EMP001', employeeName: 'Ahmad Fauzan', branchId: 'HQ-01', type: 'mock_location', deviceId: 'dev_abc123', metadata: { latitude: -6.2090, longitude: 106.8460 }, createdAt: '2026-10-05T08:12:00Z' },
-  { id: '2', employeeId: 'EMP003', employeeName: 'Budi Santoso', branchId: 'HQ-01', type: 'outside_geofence', deviceId: 'dev_xyz456', metadata: { distance: 350, radius: 100 }, createdAt: '2026-10-05T07:55:00Z' },
-  { id: '3', employeeId: 'EMP002', employeeName: 'Siti Aminah',  branchId: 'BR-02', type: 'duplicate_attendance', createdAt: '2026-10-04T14:30:00Z' },
-];
-
 export default function SecurityEvents() {
-  const [events] = useState<SecurityEvent[]>(DUMMY_EVENTS);
+  const [events, setEvents] = useState<SecurityEvent[]>([]);
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('');
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      setLoading(true);
+      try {
+        const empSnap = await getDocs(collection(db, 'employees'));
+        const empMap: Record<string, any> = {};
+        empSnap.forEach(doc => { empMap[doc.id] = doc.data(); });
+
+        const q = query(collection(db, 'security_events'), orderBy('timestamp', 'desc'), limit(100));
+        const snap = await getDocs(q);
+        const data: SecurityEvent[] = [];
+        snap.forEach(doc => {
+          const d = doc.data();
+          const emp = empMap[d.employeeId] || {};
+          data.push({
+            id: doc.id,
+            employeeId: d.employeeId || '-',
+            employeeName: emp.name || d.employeeName || 'Unknown',
+            branchId: d.branchId || emp.branchId || '-',
+            type: d.type || 'unauthorized_access',
+            deviceId: d.deviceId,
+            metadata: d.metadata || d.details || {},
+            createdAt: d.timestamp ? (d.timestamp.toDate ? d.timestamp.toDate().toISOString() : d.timestamp) : new Date().toISOString(),
+          });
+        });
+        setEvents(data);
+      } catch(e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEvents();
+  }, []);
 
   const filtered = events.filter(e => {
     const matchSearch = e.employeeName.toLowerCase().includes(search.toLowerCase());
