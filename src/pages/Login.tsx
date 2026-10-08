@@ -19,9 +19,7 @@ export default function Login() {
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <div className="h-16 w-16 bg-primary rounded-2xl flex items-center justify-center shadow-lg transform rotate-3">
-            <span className="text-white text-2xl font-bold -rotate-3">AM</span>
-          </div>
+          <img src="/logo.png" alt="Logo Klinik Al-Miftah" className="h-28 w-auto object-contain" />
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 tracking-tight">
           Klinik Al-Miftah
