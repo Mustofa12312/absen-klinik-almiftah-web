@@ -23,6 +23,7 @@ export interface Employee {
   deviceBound: boolean;
   deviceId?: string;
   deviceName?: string;
+  strNumber?: string;
 }
 
 export const AdminServices = {
