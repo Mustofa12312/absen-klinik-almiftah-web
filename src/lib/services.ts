@@ -57,6 +57,16 @@ export const AdminServices = {
     }
   },
 
+  async addEmployee(employeeData: Omit<Employee, 'id'>): Promise<void> {
+    try {
+      const { addDoc, collection } = await import('firebase/firestore');
+      await addDoc(collection(db, 'employees'), employeeData);
+    } catch (error) {
+      console.error("Gagal menambah pegawai:", error);
+      throw error;
+    }
+  },
+
   // --- EMPLOYEES ---
   async getEmployeesByBranch(branchId?: string): Promise<Employee[]> {
     try {

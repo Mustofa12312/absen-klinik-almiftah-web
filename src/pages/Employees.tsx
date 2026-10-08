@@ -1,17 +1,34 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Search, Smartphone, ShieldAlert, Edit2, MoreVertical, ShieldCheck, Upload } from 'lucide-react';
+import { Plus, Search, Smartphone, ShieldAlert, Edit2, MoreVertical, ShieldCheck, Upload, X } from 'lucide-react';
 import { AdminServices } from '../lib/services';
-import type { Employee } from '../lib/services';
+import type { Employee, Branch } from '../lib/services';
 
 export default function Employees() {
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newEmployee, setNewEmployee] = useState({ name: '', role: 'Staff', branchId: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchEmployees();
+    fetchBranches();
   }, []);
+
+  const fetchBranches = async () => {
+    try {
+      const b = await AdminServices.getBranches();
+      setBranches(b);
+      if (b.length > 0) {
+        setNewEmployee(prev => ({ ...prev, branchId: b[0].id || '' }));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const fetchEmployees = async () => {
     setLoading(true);
@@ -34,7 +51,29 @@ export default function Employees() {
   };
 
   const handleAddEmployee = () => {
-    alert('Fitur tambah pegawai sedang dalam pengembangan (Form belum diimplementasikan)');
+    setIsAddModalOpen(true);
+  };
+
+  const submitAddEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmployee.name || !newEmployee.branchId) return;
+    setIsSubmitting(true);
+    try {
+      await AdminServices.addEmployee({
+        name: newEmployee.name,
+        role: newEmployee.role,
+        branchId: newEmployee.branchId,
+        status: 'active',
+        deviceBound: false,
+      });
+      setIsAddModalOpen(false);
+      setNewEmployee({ name: '', role: 'Staff', branchId: branches[0]?.id || '' });
+      fetchEmployees();
+    } catch (err) {
+      alert('Gagal menambah pegawai');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleResetDevice = async (id: string) => {
@@ -180,6 +219,77 @@ export default function Employees() {
           </table>
         </div>
       </div>
+
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center p-4 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">Tambah Pegawai Baru</h2>
+              <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={submitAddEmployee} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Pegawai</label>
+                <input
+                  type="text"
+                  required
+                  value={newEmployee.name}
+                  onChange={e => setNewEmployee({ ...newEmployee, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+                  placeholder="Contoh: Budi Santoso"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Posisi / Role</label>
+                <input
+                  type="text"
+                  required
+                  value={newEmployee.role}
+                  onChange={e => setNewEmployee({ ...newEmployee, role: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+                  placeholder="Staff"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Penempatan Cabang</label>
+                <select
+                  required
+                  value={newEmployee.branchId}
+                  onChange={e => setNewEmployee({ ...newEmployee, branchId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white"
+                >
+                  <option value="" disabled>Pilih cabang</option>
+                  {branches.map(b => (
+                    <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="pt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !newEmployee.name || !newEmployee.branchId}
+                  className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                >
+                  {isSubmitting ? 'Menyimpan...' : 'Simpan Pegawai'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
