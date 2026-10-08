@@ -38,6 +38,16 @@ export const AdminServices = {
     }
   },
 
+  async addBranch(branchData: Omit<Branch, 'id'>): Promise<void> {
+    try {
+      const { addDoc, collection } = await import('firebase/firestore');
+      await addDoc(collection(db, 'branches'), branchData);
+    } catch (error) {
+      console.error("Gagal menambah cabang:", error);
+      throw error;
+    }
+  },
+
   async updateBranchRadius(branchId: string, newRadius: number): Promise<void> {
     try {
       const branchRef = doc(db, 'branches', branchId);

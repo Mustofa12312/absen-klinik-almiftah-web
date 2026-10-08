@@ -9,7 +9,7 @@ export default function Employees() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newEmployee, setNewEmployee] = useState({ name: '', role: 'Staff', branchId: '' });
+  const [newEmployee, setNewEmployee] = useState({ name: '', role: 'Staff', branchId: '', strNumber: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -65,9 +65,10 @@ export default function Employees() {
         branchId: newEmployee.branchId,
         status: 'active',
         deviceBound: false,
+        strNumber: newEmployee.strNumber || undefined,
       });
       setIsAddModalOpen(false);
-      setNewEmployee({ name: '', role: 'Staff', branchId: branches[0]?.id || '' });
+      setNewEmployee({ name: '', role: 'Staff', branchId: branches[0]?.id || '', strNumber: '' });
       fetchEmployees();
     } catch (err) {
       alert('Gagal menambah pegawai');
@@ -176,6 +177,7 @@ export default function Employees() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{emp.role}</div>
+                    {emp.strNumber && <div className="text-xs text-gray-500 mt-1">STR: {emp.strNumber}</div>}
                     <div className="text-sm text-gray-500 mt-1">Cabang: {emp.branchId}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -252,6 +254,17 @@ export default function Employees() {
                   onChange={e => setNewEmployee({ ...newEmployee, role: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
                   placeholder="Staff"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nomor STR (Opsional)</label>
+                <input
+                  type="text"
+                  value={newEmployee.strNumber}
+                  onChange={e => setNewEmployee({ ...newEmployee, strNumber: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+                  placeholder="Contoh: 1234567890"
                 />
               </div>
 
