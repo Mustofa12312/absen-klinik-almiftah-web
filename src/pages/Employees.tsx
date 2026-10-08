@@ -1,37 +1,54 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Plus, Search, Smartphone, ShieldAlert, Edit2, MoreVertical, ShieldCheck, Upload } from 'lucide-react';
-
-interface Employee {
-  id: string;
-  name: string;
-  role: string;
-  branch: string;
-  status: 'active' | 'inactive';
-  deviceBound: boolean;
-  deviceName?: string;
-}
-
-const DUMMY_EMPLOYEES: Employee[] = [
-  { id: '1', name: 'Ahmad Fauzan', role: 'Dokter Umum', branch: 'HQ-01', status: 'active', deviceBound: true, deviceName: 'Samsung Galaxy S23' },
-  { id: '2', name: 'Siti Aminah', role: 'Perawat', branch: 'BR-02', status: 'active', deviceBound: true, deviceName: 'iPhone 13' },
-  { id: '3', name: 'Budi Santoso', role: 'Apoteker', branch: 'HQ-01', status: 'active', deviceBound: false },
-  { id: '4', name: 'Diana Fitri', role: 'Resepsionis', branch: 'BR-02', status: 'inactive', deviceBound: true, deviceName: 'Oppo Reno 8' },
-];
+import { AdminServices } from '../lib/services';
+import type { Employee } from '../lib/services';
 
 export default function Employees() {
-  const [employees] = useState<Employee[]>(DUMMY_EMPLOYEES);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const fetchEmployees = async () => {
+    setLoading(true);
+    try {
+      const data = await AdminServices.getEmployeesByBranch();
+      setEmployees(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // In a real app, parse the CSV and send to server.
-      // For now, just show a success message.
       alert(`Berhasil mensimulasikan import file: ${file.name}`);
       event.target.value = ''; // reset
     }
   };
+
+  const handleAddEmployee = () => {
+    alert('Fitur tambah pegawai sedang dalam pengembangan (Form belum diimplementasikan)');
+  };
+
+  const handleResetDevice = async (id: string) => {
+    if (window.confirm('Reset perangkat untuk pegawai ini?')) {
+      try {
+        await AdminServices.resetDeviceBinding(id);
+        fetchEmployees();
+      } catch (e) {
+        alert('Gagal mereset perangkat');
+      }
+    }
+  };
+
+  const filtered = employees.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="space-y-6">
@@ -55,7 +72,10 @@ export default function Employees() {
             <Upload className="w-4 h-4 mr-2" />
             Import CSV
           </button>
-          <button className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors">
+          <button 
+            onClick={handleAddEmployee}
+            className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+          >
             <Plus className="w-4 h-4 mr-2" />
             Tambah Pegawai
           </button>
@@ -98,7 +118,11 @@ export default function Employees() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {employees.map((emp) => (
+              {loading ? (
+                <tr><td colSpan={5} className="px-6 py-4 text-center">Loading...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={5} className="px-6 py-4 text-center text-gray-500">Belum ada data pegawai</td></tr>
+              ) : filtered.map((emp) => (
                 <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -107,13 +131,13 @@ export default function Employees() {
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">{emp.name}</div>
-                        <div className="text-sm text-gray-500">ID: {emp.id.padStart(4, '0')}</div>
+                        <div className="text-sm text-gray-500">ID: {(emp.id ?? '').padStart(4, '0')}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{emp.role}</div>
-                    <div className="text-sm text-gray-500 mt-1">Cabang: {emp.branch}</div>
+                    <div className="text-sm text-gray-500 mt-1">Cabang: {emp.branchId}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -138,7 +162,7 @@ export default function Employees() {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end items-center space-x-3">
                       {emp.deviceBound && (
-                         <button className="text-gray-400 hover:text-orange-600 transition-colors" title="Reset Device">
+                         <button onClick={() => handleResetDevice(emp.id!)} className="text-gray-400 hover:text-orange-600 transition-colors" title="Reset Device">
                            <Smartphone className="h-4 w-4" />
                          </button>
                       )}

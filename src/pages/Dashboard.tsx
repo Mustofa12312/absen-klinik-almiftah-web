@@ -1,4 +1,6 @@
-import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { signOut } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import { 
   LayoutDashboard, Users, MapPin, Clock, Calendar, ShieldAlert,
   LogOut, Building2, FileCheck2, Menu, Smartphone, ClipboardList,
@@ -19,6 +21,16 @@ import ReportPage from './ReportPage';
 
 export default function Dashboard() {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate('/login');
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const navItems = [
     { name: 'Ringkasan',           icon: LayoutDashboard, path: '/dashboard' },
@@ -70,7 +82,10 @@ export default function Dashboard() {
         </nav>
 
         <div className="p-4 border-t border-gray-200">
-          <button className="flex items-center w-full px-3 py-2 text-sm font-medium text-red-600 rounded-lg hover:bg-red-50 transition-colors">
+          <button 
+            onClick={handleLogout}
+            className="flex items-center w-full px-3 py-2 text-sm font-medium text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+          >
             <LogOut className="mr-3 h-5 w-5" />
             Keluar
           </button>

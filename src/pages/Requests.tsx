@@ -1,24 +1,80 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, CheckCircle, XCircle, Clock, FileText } from 'lucide-react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { AdminServices } from '../lib/services';
 
 interface Request {
   id: string;
   employeeName: string;
-  type: 'Koreksi' | 'Izin' | 'Sakit' | 'Cuti' | 'Dinas';
+  type: string;
   date: string;
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
-const DUMMY_REQUESTS: Request[] = [
-  { id: '1', employeeName: 'Ahmad Fauzan', type: 'Koreksi', date: '05 Okt 2026', reason: 'Lupa absen pulang (HP Lowbet)', status: 'PENDING' },
-  { id: '2', employeeName: 'Siti Aminah', type: 'Sakit', date: '06 Okt 2026', reason: 'Demam berdarah (Surat Dokter terlampir)', status: 'PENDING' },
-  { id: '3', employeeName: 'Budi Santoso', type: 'Cuti', date: '10 Okt - 12 Okt 2026', reason: 'Acara keluarga di kampung', status: 'PENDING' },
-];
-
 export default function Requests() {
-  const [requests] = useState<Request[]>(DUMMY_REQUESTS);
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+
+  const fetchRequests = async () => {
+    setLoading(true);
+    try {
+      const leaveSnap = await getDocs(collection(db, 'leave_requests'));
+      const corrSnap = await getDocs(collection(db, 'correction_requests'));
+      
+      const all: Request[] = [];
+      
+      leaveSnap.docs.forEach(doc => {
+        const d = doc.data();
+        all.push({
+          id: doc.id,
+          employeeName: d.employeeName || 'Unknown',
+          type: d.type || 'Izin',
+          date: d.date || d.startDate || '-',
+          reason: d.reason || '-',
+          status: d.status || 'PENDING'
+        });
+      });
+      
+      corrSnap.docs.forEach(doc => {
+        const d = doc.data();
+        all.push({
+          id: doc.id,
+          employeeName: d.employeeName || 'Unknown',
+          type: 'Koreksi',
+          date: d.date || '-',
+          reason: d.reason || '-',
+          status: d.status || 'PENDING'
+        });
+      });
+
+      setRequests(all);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
+  const handleUpdateStatus = async (id: string, type: string, status: 'APPROVED' | 'REJECTED') => {
+    try {
+      await AdminServices.updateRequestStatus(id, status, type);
+      fetchRequests();
+    } catch (e) {
+      alert('Gagal update status');
+    }
+  };
+
+  const filtered = requests.filter(r => 
+    r.employeeName.toLowerCase().includes(search.toLowerCase()) || 
+    r.type.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="space-y-6">
@@ -65,7 +121,11 @@ export default function Requests() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {requests.map((req) => (
+              {loading ? (
+                <tr><td colSpan={4} className="px-6 py-4 text-center">Loading...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">Belum ada pengajuan</td></tr>
+              ) : filtered.map((req) => (
                 <tr key={req.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -96,10 +156,16 @@ export default function Requests() {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     {req.status === 'PENDING' && (
                       <div className="flex justify-end items-center space-x-2">
-                        <button className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700 transition-colors shadow-sm">
+                        <button 
+                          onClick={() => handleUpdateStatus(req.id, req.type, 'APPROVED')}
+                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700 transition-colors shadow-sm"
+                        >
                           <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
                         </button>
-                        <button className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 transition-colors shadow-sm">
+                        <button 
+                          onClick={() => handleUpdateStatus(req.id, req.type, 'REJECTED')}
+                          className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 transition-colors shadow-sm"
+                        >
                           <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
                         </button>
                       </div>

@@ -88,9 +88,10 @@ export const AdminServices = {
   },
 
   // --- REQUESTS ---
-  async updateRequestStatus(requestId: string, status: 'APPROVED' | 'REJECTED'): Promise<void> {
+  async updateRequestStatus(requestId: string, status: 'APPROVED' | 'REJECTED', type: string): Promise<void> {
     try {
-      const reqRef = doc(db, 'requests', requestId);
+      const collectionName = type === 'Koreksi' ? 'correction_requests' : 'leave_requests';
+      const reqRef = doc(db, collectionName, requestId);
       await updateDoc(reqRef, { status });
     } catch (error) {
       console.error("Gagal update status pengajuan:", error);
