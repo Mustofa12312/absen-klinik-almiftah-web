@@ -1,19 +1,29 @@
 import { useState } from 'react';
-import { LogIn, Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { LogIn, Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate login for now
-    setTimeout(() => {
-      window.location.href = '/dashboard';
-    }, 1000);
+    setError(null);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Gagal login. Periksa email & kata sandi.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -39,6 +49,13 @@ export default function Login() {
         <div className="bg-white/80 backdrop-blur-xl py-10 px-6 shadow-2xl shadow-primary/10 sm:rounded-3xl sm:px-12 border border-white/50">
           <form className="space-y-7" onSubmit={handleLogin}>
             
+            {error && (
+              <div className="rounded-lg bg-red-50 p-4 border border-red-100 flex items-start">
+                <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" />
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )}
+
             {/* Email Field */}
             <div className="space-y-1.5">
               <label htmlFor="email" className="block text-sm font-semibold text-gray-700">
