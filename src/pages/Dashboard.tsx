@@ -163,7 +163,7 @@ export default function Dashboard() {
               <span className="text-sm text-gray-700">Super Admin</span>
               <img
                 className="h-8 w-8 rounded-full bg-gray-200"
-                src="https://ui-avatars.com/api/?name=Super+Admin&background=138D5B&color=fff"
+                src="https://ui-avatars.com/api/?name=Super+Admin&background=e06a00&color=fff"
                 alt=""
               />
             </div>

@@ -101,7 +101,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="group w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg shadow-primary/30 text-sm font-semibold text-white bg-gradient-to-r from-primary to-emerald-500 hover:from-primary hover:to-emerald-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-200 transform hover:-translate-y-0.5"
+                className="group w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg shadow-primary/30 text-sm font-semibold text-white bg-gradient-to-r from-primary to-orange-400 hover:from-primary hover:to-orange-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-200 transform hover:-translate-y-0.5"
               >
                 {loading ? (
                   <>
