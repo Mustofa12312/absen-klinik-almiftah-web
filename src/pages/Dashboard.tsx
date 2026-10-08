@@ -196,21 +196,93 @@ export default function Dashboard() {
 
 // Overview dengan 11 KPI sesuai PRD Bab 61
 function Overview() {
-  const [totalEmployees, setTotalEmployees] = useState('...');
-  const [totalPresent, setTotalPresent] = useState('...');
+  const [data, setData] = useState({
+    totalEmployees: '...',
+    totalPresent: '...',
+    late: '...',
+    notCheckedIn: '...',
+    izin: '...',
+    sakit: '...',
+    cuti: '...',
+    dinas: '...',
+    inactive: '...',
+    securityEvents: '...',
+    pending: '...',
+  });
   
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const empSnap = await getDocs(collection(db, 'employees'));
-        setTotalEmployees(empSnap.size.toString());
-        
         const now = new Date();
         const todayStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
         
+        // 1. Employees
+        const empSnap = await getDocs(collection(db, 'employees'));
+        let totalActive = 0;
+        let inactive = 0;
+        empSnap.forEach(doc => {
+          if (doc.data().isActive === false) inactive++;
+          else totalActive++;
+        });
+
+        // 2. Attendance
         const attQuery = query(collection(db, 'attendance'), where('workDate', '==', todayStr));
         const attSnap = await getDocs(attQuery);
-        setTotalPresent(attSnap.size.toString());
+        let present = 0;
+        let late = 0;
+        attSnap.forEach(doc => {
+          present++;
+          const d = doc.data();
+          if (d.lateMinutes > 0 || d.status === 'late') late++;
+        });
+
+        // 3. Requests (Leave & Correction)
+        const leaveSnap = await getDocs(collection(db, 'leave_requests'));
+        const corrSnap = await getDocs(collection(db, 'correction_requests'));
+        let izin = 0, sakit = 0, cuti = 0, dinas = 0, pending = 0;
+
+        leaveSnap.forEach(doc => {
+          const d = doc.data();
+          if (d.status === 'PENDING') pending++;
+          if (d.status === 'APPROVED' && (d.date === todayStr || d.startDate === todayStr)) {
+            if (d.type === 'Izin') izin++;
+            if (d.type === 'Sakit') sakit++;
+            if (d.type === 'Cuti') cuti++;
+            if (d.type === 'Dinas') dinas++;
+          }
+        });
+
+        corrSnap.forEach(doc => {
+          if (doc.data().status === 'PENDING') pending++;
+        });
+
+        // 4. Security Events
+        const secSnap = await getDocs(collection(db, 'security_events'));
+        let secEvents = 0;
+        secSnap.forEach(doc => {
+          const d = doc.data();
+          if (d.timestamp) {
+            const tsDate = d.timestamp.toDate ? d.timestamp.toDate() : new Date(d.timestamp);
+            if (tsDate.toISOString().split('T')[0] === todayStr) secEvents++;
+          }
+        });
+
+        const notCheckedIn = Math.max(0, totalActive - (present + izin + sakit + cuti + dinas));
+
+        setData({
+          totalEmployees: (totalActive + inactive).toString(),
+          totalPresent: present.toString(),
+          late: late.toString(),
+          notCheckedIn: notCheckedIn.toString(),
+          izin: izin.toString(),
+          sakit: sakit.toString(),
+          cuti: cuti.toString(),
+          dinas: dinas.toString(),
+          inactive: inactive.toString(),
+          securityEvents: secEvents.toString(),
+          pending: pending.toString(),
+        });
+
       } catch (e) {
         console.error(e);
       }
@@ -219,17 +291,17 @@ function Overview() {
   }, []);
 
   const stats = [
-    { title: 'Total Pegawai',    value: totalEmployees,  subtitle: 'Terdaftar',                 icon: Users,         color: 'text-blue-600',   bg: 'bg-blue-50' },
-    { title: 'Hadir Hari Ini',   value: totalPresent,  subtitle: 'Sudah absen masuk',            icon: CheckCircle2,  color: 'text-green-600',  bg: 'bg-green-50' },
-    { title: 'Terlambat',        value: '8',   subtitle: 'Melebihi toleransi shift',       icon: Clock,         color: 'text-yellow-600', bg: 'bg-yellow-50' },
-    { title: 'Belum Absen',      value: '7',   subtitle: 'Perlu dipantau',                 icon: AlertCircle,   color: 'text-orange-600', bg: 'bg-orange-50' },
-    { title: 'Izin',             value: '2',   subtitle: 'Disetujui hari ini',             icon: FileCheck2,    color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { title: 'Sakit',            value: '1',   subtitle: 'Dengan surat dokter',            icon: Stethoscope,   color: 'text-purple-600', bg: 'bg-purple-50' },
-    { title: 'Cuti',             value: '3',   subtitle: 'Periode berjalan',               icon: Calendar,      color: 'text-sky-600',    bg: 'bg-sky-50' },
-    { title: 'Dinas',            value: '1',   subtitle: 'Tugas luar klinik',              icon: MapPin,        color: 'text-teal-600',   bg: 'bg-teal-50' },
-    { title: 'Pegawai Nonaktif', value: '2',   subtitle: 'Tidak perlu diabsenkan',         icon: UserX,         color: 'text-gray-500',   bg: 'bg-gray-100' },
-    { title: 'Security Events',  value: '2',   subtitle: 'Fake GPS terdeteksi',            icon: ShieldAlert,   color: 'text-red-600',    bg: 'bg-red-50',   warning: true },
-    { title: 'Koreksi Pending',  value: '4',   subtitle: 'Menunggu persetujuan admin',     icon: ClipboardList, color: 'text-amber-600',  bg: 'bg-amber-50', warning: true },
+    { title: 'Total Pegawai',    value: data.totalEmployees,  subtitle: 'Terdaftar',                 icon: Users,         color: 'text-blue-600',   bg: 'bg-blue-50' },
+    { title: 'Hadir Hari Ini',   value: data.totalPresent,  subtitle: 'Sudah absen masuk',            icon: CheckCircle2,  color: 'text-green-600',  bg: 'bg-green-50' },
+    { title: 'Terlambat',        value: data.late,   subtitle: 'Melebihi toleransi shift',       icon: Clock,         color: 'text-yellow-600', bg: 'bg-yellow-50' },
+    { title: 'Belum Absen',      value: data.notCheckedIn,   subtitle: 'Perlu dipantau',                 icon: AlertCircle,   color: 'text-orange-600', bg: 'bg-orange-50' },
+    { title: 'Izin',             value: data.izin,   subtitle: 'Disetujui hari ini',             icon: FileCheck2,    color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { title: 'Sakit',            value: data.sakit,   subtitle: 'Dengan surat dokter',            icon: Stethoscope,   color: 'text-purple-600', bg: 'bg-purple-50' },
+    { title: 'Cuti',             value: data.cuti,   subtitle: 'Periode berjalan',               icon: Calendar,      color: 'text-sky-600',    bg: 'bg-sky-50' },
+    { title: 'Dinas',            value: data.dinas,   subtitle: 'Tugas luar klinik',              icon: MapPin,        color: 'text-teal-600',   bg: 'bg-teal-50' },
+    { title: 'Pegawai Nonaktif', value: data.inactive,   subtitle: 'Tidak perlu diabsenkan',         icon: UserX,         color: 'text-gray-500',   bg: 'bg-gray-100' },
+    { title: 'Security Events',  value: data.securityEvents,   subtitle: 'Fake GPS terdeteksi',            icon: ShieldAlert,   color: 'text-red-600',    bg: 'bg-red-50',   warning: true },
+    { title: 'Koreksi Pending',  value: data.pending,   subtitle: 'Menunggu persetujuan admin',     icon: ClipboardList, color: 'text-amber-600',  bg: 'bg-amber-50', warning: true },
   ];
 
   return (
