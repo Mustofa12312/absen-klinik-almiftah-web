@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Download, BarChart2, Filter } from 'lucide-react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface ReportRow {
   name: string;
@@ -16,19 +18,95 @@ interface ReportRow {
   earlyCheckout: number;
 }
 
-const DUMMY_REPORT: ReportRow[] = [
-  { name: 'Ahmad Fauzan', branchId: 'HQ-01', shift: 'Pagi', workDays: 22, present: 18, late: 2, absent: 1, permission: 0, sick: 1, leave: 0, businessTrip: 0, earlyCheckout: 1 },
-  { name: 'Siti Aminah',  branchId: 'BR-02', shift: 'Pagi', workDays: 22, present: 17, late: 3, absent: 0, permission: 1, sick: 0, leave: 1, businessTrip: 0, earlyCheckout: 0 },
-  { name: 'Budi Santoso', branchId: 'HQ-01', shift: 'Siang', workDays: 22, present: 20, late: 1, absent: 0, permission: 0, sick: 1, leave: 0, businessTrip: 0, earlyCheckout: 0 },
-];
-
 export default function ReportPage() {
-  const [period, setPeriod] = useState('2026-10');
+  const [report, setReport] = useState<ReportRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [period, setPeriod] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [branchFilter, setBranchFilter] = useState('');
 
+  useEffect(() => {
+    const fetchReport = async () => {
+      setLoading(true);
+      try {
+        const [year, month] = period.split('-');
+        const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+        const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59);
+
+        // This is a simplified client-side aggregation.
+        // In a real production app with many records, this should be done in Cloud Functions.
+        const empSnap = await getDocs(collection(db, 'employees'));
+        const employees: any[] = [];
+        empSnap.forEach(doc => {
+          employees.push({ id: doc.id, ...doc.data() });
+        });
+
+        // We fetch attendance for the period to calculate counts
+        const attQuery = query(
+          collection(db, 'attendance'),
+          where('checkInTime', '>=', startDate),
+          where('checkInTime', '<=', endDate)
+        );
+        const attSnap = await getDocs(attQuery);
+        
+        const atts: any[] = [];
+        attSnap.forEach(doc => atts.push(doc.data()));
+
+        const reqQuery = query(
+          collection(db, 'requests'),
+          where('createdAt', '>=', startDate),
+          where('createdAt', '<=', endDate)
+        );
+        const reqSnap = await getDocs(reqQuery);
+        const requests: any[] = [];
+        reqSnap.forEach(doc => requests.push(doc.data()));
+
+        const data: ReportRow[] = employees.map(emp => {
+          const empAtts = atts.filter(a => a.employeeId === emp.id);
+          const empReqs = requests.filter(r => r.employeeId === emp.id && r.status === 'approved');
+
+          const present = empAtts.filter(a => a.status === 'present').length;
+          const late = empAtts.filter(a => a.status === 'late').length;
+          const permission = empReqs.filter(r => r.type === 'izin').length;
+          const sick = empReqs.filter(r => r.type === 'sakit').length;
+          const leave = empReqs.filter(r => r.type === 'cuti').length;
+          const businessTrip = empReqs.filter(r => r.type === 'dinas').length;
+          const earlyCheckout = empAtts.filter(a => a.earlyCheckout).length;
+
+          // Approx work days for the month without weekends
+          let workDays = 22;
+
+          return {
+            name: emp.name,
+            branchId: emp.branchId || '-',
+            shift: emp.shiftId || 'Pagi', // Just a fallback if no shift is assigned
+            workDays,
+            present,
+            late,
+            permission,
+            sick,
+            leave,
+            businessTrip,
+            earlyCheckout,
+            absent: Math.max(0, workDays - (present + late + permission + sick + leave + businessTrip))
+          };
+        });
+
+        setReport(data);
+      } catch (e) {
+        console.error('Failed to fetch report', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchReport();
+  }, [period]);
+
   const filtered = branchFilter
-    ? DUMMY_REPORT.filter(r => r.branchId === branchFilter)
-    : DUMMY_REPORT;
+    ? report.filter(r => r.branchId === branchFilter)
+    : report;
 
   const exportCSV = () => {
     const headers = ['Nama', 'Cabang', 'Shift', 'Hari Kerja', 'Hadir', 'Terlambat', 'Tidak Hadir', 'Izin', 'Sakit', 'Cuti', 'Dinas', 'Pulang Cepat'];
@@ -120,7 +198,11 @@ export default function ReportPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filtered.map((row) => (
+              {loading ? (
+                <tr><td colSpan={12} className="px-6 py-12 text-center text-sm text-gray-400">Memuat laporan...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={12} className="px-6 py-12 text-center text-sm text-gray-400">Tidak ada data untuk periode ini.</td></tr>
+              ) : filtered.map((row) => (
                 <tr key={row.name} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{row.name}</td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{row.branchId}</td>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
+import { Plus, Search, MoreVertical, Edit2, Calendar, Ban } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Plus, Search, MoreVertical, Edit2, Calendar, Ban } from 'lucide-react';
 
 interface Holiday {
   id: string;
@@ -14,8 +14,8 @@ interface Holiday {
 
 export default function Holidays() {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     const fetchHolidays = async () => {
@@ -35,8 +35,8 @@ export default function Holidays() {
           });
         });
         setHolidays(data);
-      } catch(e) {
-        console.error("Error fetching holidays:", e);
+      } catch (e) {
+        console.error(e);
       } finally {
         setLoading(false);
       }

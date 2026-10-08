@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
+import { Plus, Search, MapPin, MoreVertical, Edit2, Ban } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Plus, Search, MapPin, MoreVertical, Edit2, Ban } from 'lucide-react';
 
 interface Branch {
   id: string;
@@ -14,8 +14,8 @@ interface Branch {
 
 export default function Branches() {
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     const fetchBranches = async () => {
@@ -30,13 +30,13 @@ export default function Branches() {
             name: d.name || 'Unknown',
             code: d.code || doc.id,
             address: d.address || '-',
-            radius: d.radius || 100,
+            radius: d.radius || 0,
             status: d.isActive === false ? 'inactive' : 'active',
           });
         });
         setBranches(data);
-      } catch(e) {
-        console.error("Error fetching branches:", e);
+      } catch (e) {
+        console.error(e);
       } finally {
         setLoading(false);
       }
@@ -93,10 +93,10 @@ export default function Branches() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
-                 <tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-400">Memuat data cabang...</td></tr>
-              ) : branches.length === 0 ? (
-                 <tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-400">Tidak ada data cabang.</td></tr>
-              ) : branches.map((branch) => (
+                <tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-400">Memuat data cabang...</td></tr>
+              ) : branches.filter(b => b.name.toLowerCase().includes(search.toLowerCase()) || b.code.toLowerCase().includes(search.toLowerCase())).length === 0 ? (
+                <tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-400">Tidak ada cabang ditemukan.</td></tr>
+              ) : branches.filter(b => b.name.toLowerCase().includes(search.toLowerCase()) || b.code.toLowerCase().includes(search.toLowerCase())).map((branch) => (
                 <tr key={branch.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">

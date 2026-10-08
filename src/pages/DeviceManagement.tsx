@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
+import { Smartphone, Search, RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Smartphone, Search, RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 interface Device {
   id: string;
@@ -28,29 +28,40 @@ export default function DeviceManagement() {
       try {
         const empSnap = await getDocs(collection(db, 'employees'));
         const empMap: Record<string, any> = {};
-        empSnap.forEach(doc => { empMap[doc.id] = doc.data(); });
+        empSnap.forEach(doc => {
+          empMap[doc.id] = doc.data();
+        });
 
         const snap = await getDocs(collection(db, 'devices'));
         const data: Device[] = [];
         snap.forEach(doc => {
           const d = doc.data();
           const emp = empMap[d.employeeId] || {};
+          let lastSeen = d.lastSeenAt;
+          if (d.lastSeenAt && d.lastSeenAt.toDate) {
+            lastSeen = d.lastSeenAt.toDate().toISOString();
+          }
+          let registered = d.registeredAt;
+          if (d.registeredAt && d.registeredAt.toDate) {
+            registered = d.registeredAt.toDate().toISOString();
+          }
+
           data.push({
             id: doc.id,
             employeeId: d.employeeId || '-',
-            employeeName: emp.name || d.employeeName || 'Unknown',
-            deviceId: d.deviceId || '-',
-            manufacturer: d.manufacturer || d.brand || 'Unknown',
+            employeeName: emp.name || 'Unknown',
+            deviceId: d.deviceId || doc.id,
+            manufacturer: d.manufacturer || 'Unknown',
             model: d.model || 'Unknown',
-            androidVersion: d.osVersion || d.androidVersion || '-',
-            appVersion: d.appVersion || '1.0.0',
+            androidVersion: d.androidVersion || 'Unknown',
+            appVersion: d.appVersion || 'Unknown',
             isActive: d.isActive !== false,
-            registeredAt: d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate().toISOString() : d.createdAt) : new Date().toISOString(),
-            lastSeenAt: d.lastSeen ? (d.lastSeen.toDate ? d.lastSeen.toDate().toISOString() : d.lastSeen) : new Date().toISOString(),
+            registeredAt: registered || new Date().toISOString(),
+            lastSeenAt: lastSeen || new Date().toISOString(),
           });
         });
         setDevices(data);
-      } catch(e) {
+      } catch (e) {
         console.error(e);
       } finally {
         setLoading(false);
@@ -59,13 +70,13 @@ export default function DeviceManagement() {
     fetchDevices();
   }, []);
 
-  const handleReset = async (deviceId: string, empName: string, docId: string) => {
+  const handleReset = async (empName: string, id: string) => {
     if (window.confirm(`Reset device binding untuk ${empName}? Pegawai perlu mendaftar ulang perangkat.`)) {
       try {
-        await updateDoc(doc(db, 'devices', docId), { isActive: false });
-        setDevices(prev => prev.map(d => d.id === docId ? { ...d, isActive: false } : d));
-      } catch(e) {
-        console.error(e);
+        await updateDoc(doc(db, 'devices', id), { isActive: false });
+        setDevices(prev => prev.map(d => d.id === id ? { ...d, isActive: false } : d));
+      } catch (e) {
+        console.error('Failed to reset device', e);
         alert('Gagal mereset perangkat');
       }
     }
@@ -111,7 +122,11 @@ export default function DeviceManagement() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filtered.map((dev) => (
+              {loading ? (
+                <tr><td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-400">Memuat data perangkat...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-400">Tidak ada perangkat ditemukan.</td></tr>
+              ) : filtered.map((dev) => (
                 <tr key={dev.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{dev.employeeName}</div>
@@ -147,7 +162,7 @@ export default function DeviceManagement() {
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     {dev.isActive && (
                       <button
-                        onClick={() => handleReset(dev.id, dev.employeeName)}
+                        onClick={() => handleReset(dev.employeeName, dev.id)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors"
                         title="Reset Device Binding"
                       >

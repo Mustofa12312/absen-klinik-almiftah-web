@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
+import { Plus, Clock, Edit2, AlertCircle, Upload } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Plus, Clock, Edit2, AlertCircle, Upload } from 'lucide-react';
 
 interface Shift {
   id: string;
@@ -15,7 +15,7 @@ interface Shift {
 export default function Shifts() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(false);
-  
+
   useEffect(() => {
     const fetchShifts = async () => {
       setLoading(true);
@@ -29,13 +29,13 @@ export default function Shifts() {
             name: d.name || 'Unknown',
             startTime: d.startTime || '00:00',
             endTime: d.endTime || '00:00',
-            tolerance: d.tolerance ?? 15,
+            tolerance: d.tolerance || 0,
             crossesMidnight: d.crossesMidnight || false,
           });
         });
         setShifts(data);
-      } catch(e) {
-        console.error("Error fetching shifts:", e);
+      } catch (e) {
+        console.error(e);
       } finally {
         setLoading(false);
       }
@@ -81,12 +81,13 @@ export default function Shifts() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {loading ? (
-          <div className="col-span-full py-12 text-center text-sm text-gray-400">Memuat data shift...</div>
-        ) : shifts.length === 0 ? (
-          <div className="col-span-full py-12 text-center text-sm text-gray-400">Tidak ada data shift.</div>
-        ) : shifts.map((shift) => (
+      {loading ? (
+        <div className="text-center py-12 text-gray-500">Memuat data shift...</div>
+      ) : shifts.length === 0 ? (
+        <div className="text-center py-12 text-gray-500">Tidak ada data shift.</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {shifts.map((shift) => (
           <div key={shift.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col transition-all hover:shadow-md">
             <div className="p-5 flex-1">
               <div className="flex justify-between items-start mb-4">
@@ -129,7 +130,8 @@ export default function Shifts() {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

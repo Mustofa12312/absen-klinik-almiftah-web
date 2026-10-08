@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { ShieldAlert, Search, AlertTriangle, MapPin, Cpu, Fingerprint, RefreshCw, Download } from 'lucide-react';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface SecurityEvent {
   id: string;
@@ -36,27 +36,42 @@ export default function SecurityEvents() {
       try {
         const empSnap = await getDocs(collection(db, 'employees'));
         const empMap: Record<string, any> = {};
-        empSnap.forEach(doc => { empMap[doc.id] = doc.data(); });
+        empSnap.forEach(doc => {
+          empMap[doc.id] = doc.data();
+        });
 
-        const q = query(collection(db, 'security_events'), orderBy('timestamp', 'desc'), limit(100));
-        const snap = await getDocs(q);
+        const snap = await getDocs(query(collection(db, 'security_events'), orderBy('timestamp', 'desc')));
         const data: SecurityEvent[] = [];
         snap.forEach(doc => {
           const d = doc.data();
-          const emp = empMap[d.employeeId] || {};
+          let empId = d.employeeId;
+          let branchId = d.branchId || '-';
+          let empName = d.employeeName;
+          
+          if (d.deviceId) {
+            // we could try to look up device to find employee, but let's assume it's logged with employeeId
+          }
+          
+          const emp = empMap[empId] || {};
+          
+          let createdAt = new Date().toISOString();
+          if (d.timestamp) {
+            createdAt = (d.timestamp.toDate ? d.timestamp.toDate() : new Date(d.timestamp)).toISOString();
+          }
+
           data.push({
             id: doc.id,
-            employeeId: d.employeeId || '-',
-            employeeName: emp.name || d.employeeName || 'Unknown',
-            branchId: d.branchId || emp.branchId || '-',
+            employeeId: empId || '-',
+            employeeName: empName || emp.name || 'Unknown',
+            branchId: branchId,
             type: d.type || 'unauthorized_access',
             deviceId: d.deviceId,
-            metadata: d.metadata || d.details || {},
-            createdAt: d.timestamp ? (d.timestamp.toDate ? d.timestamp.toDate().toISOString() : d.timestamp) : new Date().toISOString(),
+            metadata: d.metadata || {},
+            createdAt,
           });
         });
         setEvents(data);
-      } catch(e) {
+      } catch (e) {
         console.error(e);
       } finally {
         setLoading(false);
@@ -160,7 +175,9 @@ export default function SecurityEvents() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filtered.length === 0 ? (
+              {loading ? (
+                <tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-400">Memuat log keamanan...</td></tr>
+              ) : filtered.length === 0 ? (
                 <tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-400">Tidak ada security event ditemukan.</td></tr>
               ) : filtered.map((ev) => {
                 const cfg = TYPE_CONFIG[ev.type];

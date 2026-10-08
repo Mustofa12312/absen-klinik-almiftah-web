@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ClipboardList, Search, Download } from 'lucide-react';
+import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface AuditLog {
   id: string;
@@ -15,28 +17,59 @@ interface AuditLog {
   createdAt: string;
 }
 
-const DUMMY_LOGS: AuditLog[] = [
-  { id: '1', actorUid: 'admin_uid', actorName: 'Super Admin', actorRole: 'super_admin', action: 'approve_correction', targetType: 'correction_request', targetId: 'req_001', description: 'Menyetujui koreksi absensi Ahmad Fauzan (lupa pulang)', before: { status: 'pending' }, after: { status: 'approved' }, createdAt: '2026-10-05T10:15:00Z' },
-  { id: '2', actorUid: 'admin_uid', actorName: 'Super Admin', actorRole: 'super_admin', action: 'update_location_radius', targetType: 'location', targetId: 'loc_001', description: 'Mengubah radius geofence Cabang Pusat', before: { radiusMeters: 100 }, after: { radiusMeters: 150 }, createdAt: '2026-10-05T09:30:00Z' },
-  { id: '3', actorUid: 'admin_uid', actorName: 'Super Admin', actorRole: 'super_admin', action: 'reset_device', targetType: 'device', targetId: 'dev_abc123', description: 'Reset device binding Ahmad Fauzan (ganti HP)', before: { isActive: true }, after: { isActive: false }, createdAt: '2026-10-04T14:00:00Z' },
-  { id: '4', actorUid: 'admin_uid', actorName: 'Super Admin', actorRole: 'super_admin', action: 'deactivate_employee', targetType: 'employee', targetId: 'EMP004', description: 'Menonaktifkan pegawai Diana Fitri (resign)', before: { status: 'active' }, after: { status: 'inactive' }, createdAt: '2026-10-03T08:00:00Z' },
-];
-
-const ACTION_LABELS: Record<string, string> = {
-  approve_correction: 'Setuju Koreksi',
-  reject_correction: 'Tolak Koreksi',
-  approve_leave: 'Setuju Pengajuan',
-  reject_leave: 'Tolak Pengajuan',
-  update_location_radius: 'Ubah Radius',
-  reset_device: 'Reset Device',
-  deactivate_employee: 'Nonaktifkan Pegawai',
-  create_employee: 'Tambah Pegawai',
-  create_branch: 'Tambah Cabang',
-};
-
 export default function AuditLog() {
-  const [logs] = useState<AuditLog[]>(DUMMY_LOGS);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      setLoading(true);
+      try {
+        const snap = await getDocs(query(collection(db, 'audit_logs'), orderBy('createdAt', 'desc'), limit(100)));
+        const data: AuditLog[] = [];
+        snap.forEach(doc => {
+          const d = doc.data();
+          let createdAt = new Date().toISOString();
+          if (d.createdAt) {
+            createdAt = (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)).toISOString();
+          }
+
+          data.push({
+            id: doc.id,
+            actorUid: d.actorUid || '-',
+            actorName: d.actorName || 'Sistem / Super Admin',
+            actorRole: d.actorRole || 'super_admin',
+            action: d.action || 'unknown',
+            targetType: d.targetType || 'unknown',
+            targetId: d.targetId || '-',
+            description: d.description || '-',
+            before: d.before,
+            after: d.after,
+            createdAt,
+          });
+        });
+        setLogs(data);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLogs();
+  }, []);
+
+  const ACTION_LABELS: Record<string, string> = {
+    approve_correction: 'Setuju Koreksi',
+    reject_correction: 'Tolak Koreksi',
+    approve_leave: 'Setuju Pengajuan',
+    reject_leave: 'Tolak Pengajuan',
+    update_location_radius: 'Ubah Radius',
+    reset_device: 'Reset Device',
+    deactivate_employee: 'Nonaktifkan Pegawai',
+    create_employee: 'Tambah Pegawai',
+    create_branch: 'Tambah Cabang',
+  };
 
   const filtered = logs.filter(l =>
     l.description.toLowerCase().includes(search.toLowerCase()) ||
@@ -110,7 +143,9 @@ export default function AuditLog() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filtered.length === 0 ? (
+              {loading ? (
+                <tr><td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-400">Memuat log aktivitas...</td></tr>
+              ) : filtered.length === 0 ? (
                 <tr><td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-400">Tidak ada log ditemukan.</td></tr>
               ) : filtered.map((log) => (
                 <tr key={log.id} className="hover:bg-gray-50 transition-colors">
