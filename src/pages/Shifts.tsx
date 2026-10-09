@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Plus, Clock, Edit2, AlertCircle, Upload, Download, FileText, X } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { AdminServices, Shift } from '../lib/services';
+import { AdminServices } from '../lib/services';
+import type { Shift } from '../lib/services';
 
 export default function Shifts() {
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -308,7 +309,7 @@ export default function Shifts() {
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
               <h3 className="text-lg font-medium text-gray-900">{editingShift ? 'Edit Shift' : 'Tambah Shift Baru'}</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-500">
+              <button disabled={isSubmitting} onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-500 disabled:opacity-50">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -374,8 +375,9 @@ export default function Shifts() {
               <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
                 <button 
                   type="button" 
+                  disabled={isSubmitting}
                   onClick={() => setIsModalOpen(false)} 
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
                 >
                   Batal
                 </button>

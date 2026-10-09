@@ -54,9 +54,10 @@ export default function SecurityEvents() {
           
           const emp = empMap[empId] || {};
           
+          const tsRaw = d.createdAt || d.timestamp;
           let createdAt = new Date().toISOString();
-          if (d.timestamp) {
-            createdAt = (d.timestamp.toDate ? d.timestamp.toDate() : new Date(d.timestamp)).toISOString();
+          if (tsRaw) {
+            createdAt = (tsRaw.toDate ? tsRaw.toDate() : new Date(tsRaw)).toISOString();
           }
 
           data.push({

@@ -9,8 +9,9 @@ export default function Employees() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterBranch, setFilterBranch] = useState('');
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newEmployee, setNewEmployee] = useState({ name: '', role: 'Staff', branchId: '', strNumber: '' });
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [employeeForm, setEmployeeForm] = useState({ name: '', role: 'Staff', branchId: '', strNumber: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -24,7 +25,7 @@ export default function Employees() {
       const b = await AdminServices.getBranches();
       setBranches(b);
       if (b.length > 0) {
-        setNewEmployee(prev => ({ ...prev, branchId: b[0].id || '' }));
+        setEmployeeForm(prev => ({ ...prev, branchId: b[0].id || '' }));
       }
     } catch (e) {
       console.error(e);
@@ -181,27 +182,44 @@ export default function Employees() {
 
 
   const handleAddEmployee = () => {
-    setIsAddModalOpen(true);
+    setEditingId(null);
+    setEmployeeForm({ name: '', role: 'Staff', branchId: branches[0]?.id || '', strNumber: '' });
+    setIsModalOpen(true);
   };
 
-  const submitAddEmployee = async (e: React.FormEvent) => {
+  const handleEditEmployee = (emp: Employee) => {
+    setEditingId(emp.id || null);
+    setEmployeeForm({
+      name: emp.name,
+      role: emp.role,
+      branchId: emp.branchId,
+      strNumber: emp.strNumber || ''
+    });
+    setIsModalOpen(true);
+  };
+
+  const submitForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEmployee.name || !newEmployee.branchId) return;
+    if (!employeeForm.name || !employeeForm.branchId) return;
     setIsSubmitting(true);
     try {
-      await AdminServices.addEmployee({
-        name: newEmployee.name,
-        role: newEmployee.role,
-        branchId: newEmployee.branchId,
-        status: 'active',
-        deviceBound: false,
-        strNumber: newEmployee.strNumber || undefined,
-      });
-      setIsAddModalOpen(false);
-      setNewEmployee({ name: '', role: 'Staff', branchId: branches[0]?.id || '', strNumber: '' });
+      if (editingId) {
+        await AdminServices.updateEmployee(editingId, employeeForm);
+      } else {
+        await AdminServices.addEmployee({
+          name: employeeForm.name,
+          role: employeeForm.role,
+          branchId: employeeForm.branchId,
+          status: 'active',
+          deviceBound: false,
+          strNumber: employeeForm.strNumber || undefined,
+        });
+      }
+      setIsModalOpen(false);
+      setEmployeeForm({ name: '', role: 'Staff', branchId: branches[0]?.id || '', strNumber: '' });
       fetchEmployees();
     } catch (err) {
-      alert('Gagal menambah pegawai');
+      alert('Gagal menyimpan pegawai');
     } finally {
       setIsSubmitting(false);
     }
@@ -363,7 +381,7 @@ export default function Employees() {
                            <Smartphone className="h-4 w-4" />
                          </button>
                       )}
-                      <button className="text-gray-400 hover:text-primary transition-colors" title="Edit">
+                      <button onClick={() => handleEditEmployee(emp)} className="text-gray-400 hover:text-primary transition-colors" title="Edit">
                         <Edit2 className="h-4 w-4" />
                       </button>
                       <button className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -378,24 +396,24 @@ export default function Employees() {
         </div>
       </div>
 
-      {isAddModalOpen && (
+      {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center p-4 border-b border-gray-100">
-              <h2 className="text-lg font-semibold text-gray-900">Tambah Pegawai Baru</h2>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+              <h2 className="text-lg font-semibold text-gray-900">{editingId ? 'Edit Pegawai' : 'Tambah Pegawai Baru'}</h2>
+              <button disabled={isSubmitting} onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50">
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <form onSubmit={submitAddEmployee} className="p-4 space-y-4">
+            <form onSubmit={submitForm} className="p-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nama Pegawai</label>
                 <input
                   type="text"
                   required
-                  value={newEmployee.name}
-                  onChange={e => setNewEmployee({ ...newEmployee, name: e.target.value })}
+                  value={employeeForm.name}
+                  onChange={e => setEmployeeForm({ ...employeeForm, name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
                   placeholder="Contoh: Budi Santoso"
                 />
@@ -406,8 +424,8 @@ export default function Employees() {
                 <input
                   type="text"
                   required
-                  value={newEmployee.role}
-                  onChange={e => setNewEmployee({ ...newEmployee, role: e.target.value })}
+                  value={employeeForm.role}
+                  onChange={e => setEmployeeForm({ ...employeeForm, role: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
                   placeholder="Staff"
                 />
@@ -417,8 +435,8 @@ export default function Employees() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nomor STR (Opsional)</label>
                 <input
                   type="text"
-                  value={newEmployee.strNumber}
-                  onChange={e => setNewEmployee({ ...newEmployee, strNumber: e.target.value })}
+                  value={employeeForm.strNumber}
+                  onChange={e => setEmployeeForm({ ...employeeForm, strNumber: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
                   placeholder="Contoh: 1234567890"
                 />
@@ -428,8 +446,8 @@ export default function Employees() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Penempatan Cabang</label>
                 <select
                   required
-                  value={newEmployee.branchId}
-                  onChange={e => setNewEmployee({ ...newEmployee, branchId: e.target.value })}
+                  value={employeeForm.branchId}
+                  onChange={e => setEmployeeForm({ ...employeeForm, branchId: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white"
                 >
                   <option value="" disabled>Pilih cabang</option>
@@ -442,17 +460,18 @@ export default function Employees() {
               <div className="pt-4 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none transition-colors"
+                  disabled={isSubmitting}
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none transition-colors disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || !newEmployee.name || !newEmployee.branchId}
+                  disabled={isSubmitting || !employeeForm.name || !employeeForm.branchId}
                   className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                 >
-                  {isSubmitting ? 'Menyimpan...' : 'Simpan Pegawai'}
+                  {isSubmitting ? 'Menyimpan...' : (editingId ? 'Simpan Perubahan' : 'Simpan Pegawai')}
                 </button>
               </div>
             </form>

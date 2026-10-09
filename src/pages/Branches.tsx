@@ -17,8 +17,9 @@ export default function Branches() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newBranch, setNewBranch] = useState({ name: '', code: '', address: '', radius: 50 });
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [branchForm, setBranchForm] = useState({ name: '', code: '', address: '', radius: 50 });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchBranches = async () => {
@@ -50,26 +51,42 @@ export default function Branches() {
     fetchBranches();
   }, []);
 
-  const submitAddBranch = async (e: React.FormEvent) => {
+  const openAddModal = () => {
+    setEditingId(null);
+    setBranchForm({ name: '', code: '', address: '', radius: 50 });
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (b: Branch) => {
+    setEditingId(b.id);
+    setBranchForm({ name: b.name, code: b.code, address: b.address || '', radius: b.radius || 50 });
+    setIsModalOpen(true);
+  };
+
+  const submitForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newBranch.name || !newBranch.code) return;
+    if (!branchForm.name || !branchForm.code) return;
     setIsSubmitting(true);
     try {
-      await AdminServices.addBranch({
-        name: newBranch.name,
-        code: newBranch.code,
-        address: newBranch.address,
-        radius: Number(newBranch.radius),
-        status: 'active',
-        latitude: -6.2, // default dummy
-        longitude: 106.8, // default dummy
-        maxAccuracyMeters: 20
-      });
-      setIsAddModalOpen(false);
-      setNewBranch({ name: '', code: '', address: '', radius: 50 });
+      if (editingId) {
+        await AdminServices.updateBranch(editingId, branchForm);
+      } else {
+        await AdminServices.addBranch({
+          name: branchForm.name,
+          code: branchForm.code,
+          address: branchForm.address,
+          radius: Number(branchForm.radius),
+          status: 'active',
+          latitude: -6.2, // default dummy
+          longitude: 106.8, // default dummy
+          maxAccuracyMeters: 20
+        });
+      }
+      setIsModalOpen(false);
+      setBranchForm({ name: '', code: '', address: '', radius: 50 });
       fetchBranches();
     } catch (err) {
-      alert('Gagal menambah cabang');
+      alert('Gagal menyimpan cabang');
     } finally {
       setIsSubmitting(false);
     }
@@ -82,7 +99,7 @@ export default function Branches() {
           <h1 className="text-2xl font-semibold text-gray-900">Manajemen Cabang</h1>
           <p className="mt-1 text-sm text-gray-500">Kelola lokasi, geofence, dan radius absensi klinik.</p>
         </div>
-        <button onClick={() => setIsAddModalOpen(true)} className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors">
+        <button onClick={openAddModal} className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors">
           <Plus className="w-4 h-4 mr-2" />
           Tambah Cabang
         </button>
@@ -153,7 +170,7 @@ export default function Branches() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end items-center space-x-3">
-                      <button className="text-gray-400 hover:text-primary transition-colors" title="Edit">
+                      <button onClick={() => openEditModal(branch)} className="text-gray-400 hover:text-primary transition-colors" title="Edit">
                         <Edit2 className="h-4 w-4" />
                       </button>
                       <button className="text-gray-400 hover:text-red-600 transition-colors" title="Nonaktifkan">
@@ -171,24 +188,24 @@ export default function Branches() {
         </div>
       </div>
 
-      {isAddModalOpen && (
+      {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center p-4 border-b border-gray-100">
-              <h2 className="text-lg font-semibold text-gray-900">Tambah Cabang Baru</h2>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+              <h2 className="text-lg font-semibold text-gray-900">{editingId ? 'Edit Cabang' : 'Tambah Cabang Baru'}</h2>
+              <button disabled={isSubmitting} onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50">
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <form onSubmit={submitAddBranch} className="p-4 space-y-4">
+            <form onSubmit={submitForm} className="p-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nama Cabang</label>
                 <input
                   type="text"
                   required
-                  value={newBranch.name}
-                  onChange={e => setNewBranch({ ...newBranch, name: e.target.value })}
+                  value={branchForm.name}
+                  onChange={e => setBranchForm({ ...branchForm, name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
                   placeholder="Contoh: Cabang Utama"
                 />
@@ -199,8 +216,8 @@ export default function Branches() {
                 <input
                   type="text"
                   required
-                  value={newBranch.code}
-                  onChange={e => setNewBranch({ ...newBranch, code: e.target.value })}
+                  value={branchForm.code}
+                  onChange={e => setBranchForm({ ...branchForm, code: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
                   placeholder="HQ-01"
                 />
@@ -209,8 +226,8 @@ export default function Branches() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Alamat (Opsional)</label>
                 <textarea
-                  value={newBranch.address}
-                  onChange={e => setNewBranch({ ...newBranch, address: e.target.value })}
+                  value={branchForm.address}
+                  onChange={e => setBranchForm({ ...branchForm, address: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
                   placeholder="Jl. Raya No 1..."
                   rows={2}
@@ -223,8 +240,8 @@ export default function Branches() {
                   type="number"
                   required
                   min="10"
-                  value={newBranch.radius}
-                  onChange={e => setNewBranch({ ...newBranch, radius: Number(e.target.value) })}
+                  value={branchForm.radius}
+                  onChange={e => setBranchForm({ ...branchForm, radius: Number(e.target.value) })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
                   placeholder="50"
                 />
@@ -233,17 +250,18 @@ export default function Branches() {
               <div className="pt-4 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none transition-colors"
+                  disabled={isSubmitting}
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none transition-colors disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || !newBranch.name || !newBranch.code}
+                  disabled={isSubmitting || !branchForm.name || !branchForm.code}
                   className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                 >
-                  {isSubmitting ? 'Menyimpan...' : 'Simpan Cabang'}
+                  {isSubmitting ? 'Menyimpan...' : (editingId ? 'Simpan Perubahan' : 'Simpan Cabang')}
                 </button>
               </div>
             </form>

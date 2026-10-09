@@ -30,9 +30,10 @@ export default function AuditLog() {
         const data: AuditLog[] = [];
         snap.forEach(doc => {
           const d = doc.data();
+          const tsRaw = d.createdAt || d.timestamp;
           let createdAt = new Date().toISOString();
-          if (d.createdAt) {
-            createdAt = (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)).toISOString();
+          if (tsRaw) {
+            createdAt = (tsRaw.toDate ? tsRaw.toDate() : new Date(tsRaw)).toISOString();
           }
 
           data.push({
