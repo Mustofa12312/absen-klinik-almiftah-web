@@ -13,6 +13,7 @@ export default function Employees() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [employeeForm, setEmployeeForm] = useState({ name: '', role: 'Staff', branchId: '', strNumber: '', phone: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGeneratingAuth, setIsGeneratingAuth] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -215,7 +216,7 @@ export default function Employees() {
       if (editingId) {
         await AdminServices.updateEmployee(editingId, employeeForm);
       } else {
-        await AdminServices.addEmployee({
+        await AdminServices.addEmployeeAndAuth({
           name: employeeForm.name,
           role: employeeForm.role,
           branchId: employeeForm.branchId,
@@ -243,6 +244,21 @@ export default function Employees() {
       } catch (e) {
         alert('Gagal mereset perangkat');
       }
+    }
+  };
+
+  const handleGenerateAuth = async () => {
+    if (!window.confirm('Buat email & password default (Klinik123) untuk semua pegawai yang belum punya akun? (Pegawai lama di Firestore akan di-migrate ke ID Auth yang baru).')) return;
+    
+    setIsGeneratingAuth(true);
+    try {
+      const result = await AdminServices.generateAuthAccounts();
+      alert(`Berhasil: ${result.success} akun dibuat.\nGagal: ${result.failed} akun.`);
+      fetchEmployees();
+    } catch (e) {
+      alert('Terjadi kesalahan saat membuat akun');
+    } finally {
+      setIsGeneratingAuth(false);
     }
   };
 
@@ -286,11 +302,23 @@ export default function Employees() {
           <button 
             onClick={() => fileInputRef.current?.click()}
             className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isGeneratingAuth}
           >
             <Upload className="w-4 h-4 mr-2" />
             {isSubmitting ? 'Importing...' : 'Import CSV'}
           </button>
+          
+          {employees.some(e => !e.id || e.id.length < 28) && (
+            <button 
+              onClick={handleGenerateAuth}
+              disabled={isSubmitting || isGeneratingAuth}
+              className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-amber-600 hover:bg-amber-700 focus:outline-none transition-colors disabled:opacity-50"
+            >
+              <ShieldAlert className="w-4 h-4 mr-2" />
+              {isGeneratingAuth ? 'Memproses...' : 'Buat Akun Login'}
+            </button>
+          )}
+
           <button 
             onClick={handleAddEmployee}
             className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"

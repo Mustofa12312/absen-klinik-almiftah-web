@@ -1,5 +1,6 @@
-import { collection, getDocs, doc, updateDoc, addDoc, writeBatch, query, where } from 'firebase/firestore';
-import { db } from './firebase';
+import { collection, getDocs, doc, updateDoc, addDoc, writeBatch, query, where, setDoc, deleteDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { db, secondaryAuth } from './firebase';
 
 // Interfaces
 export interface Branch {
@@ -96,6 +97,25 @@ export const AdminServices = {
     }
   },
 
+  async addEmployeeAndAuth(employeeData: Omit<Employee, 'id'>): Promise<void> {
+    try {
+      const email = `${employeeData.strNumber || employeeData.phone || 'baru'}@almiftah.com`.toLowerCase();
+      const password = 'Klinik123';
+      
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const newUid = userCredential.user.uid;
+
+      await setDoc(doc(db, 'employees', newUid), {
+        ...employeeData,
+        email: email
+      });
+    } catch (error) {
+      console.error("Gagal menambah pegawai dan auth:", error);
+      // Fallback to normal add if auth fails (e.g. email already exists)
+      await addDoc(collection(db, 'employees'), employeeData);
+    }
+  },
+
   async updateEmployee(employeeId: string, data: Partial<Omit<Employee, 'id'>>): Promise<void> {
     try {
       const empRef = doc(db, 'employees', employeeId);
@@ -130,6 +150,43 @@ export const AdminServices = {
       console.error("Gagal import pegawai:", error);
       throw error;
     }
+  },
+
+  async generateAuthAccounts(): Promise<{ success: number, failed: number }> {
+    const snap = await getDocs(collection(db, 'employees'));
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (const docSnap of snap.docs) {
+      const empId = docSnap.id;
+      const data = docSnap.data();
+
+      // Firestore auto-ids are 20 chars, Firebase Auth uids are 28 chars
+      // If it's already 28 chars, it might already have an Auth account
+      if (empId.length >= 28) continue; 
+
+      const email = `${data.strNumber || data.phone || empId.substring(0,8)}@almiftah.com`.toLowerCase();
+      const password = 'Klinik123'; // Default password
+
+      try {
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+        const newUid = userCredential.user.uid;
+        
+        // Create new doc with Auth uid
+        await setDoc(doc(db, 'employees', newUid), {
+          ...data,
+          email: email
+        });
+
+        // Delete old doc
+        await deleteDoc(doc(db, 'employees', empId));
+        successCount++;
+      } catch (err: any) {
+        console.error(`Gagal membuat auth untuk ${data.name}:`, err);
+        failedCount++;
+      }
+    }
+    return { success: successCount, failed: failedCount };
   },
 
   // --- EMPLOYEES ---
