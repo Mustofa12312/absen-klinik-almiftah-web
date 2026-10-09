@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { LogOut, User, MapPin, Calendar } from 'lucide-react';
+import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc } from 'firebase/firestore';
+import { LogOut, User, MapPin, Calendar, Clock, Fingerprint, CheckCircle2 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 
 export default function EmployeeDashboard() {
   const [profile, setProfile] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
+  const [todayAttendance, setTodayAttendance] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -31,6 +33,11 @@ export default function EmployeeDashboard() {
         // Sort by time descending manually since index might not exist
         att.sort((a, b) => b.checkInTime.localeCompare(a.checkInTime));
         setHistory(att.slice(0, 5)); // Last 5
+        
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const todayAtt = att.find((a: any) => a.date === todayStr);
+        setTodayAttendance(todayAtt || null);
       } catch (err) {
         console.error(err);
       } finally {
@@ -42,6 +49,72 @@ export default function EmployeeDashboard() {
 
   const handleLogout = () => {
     signOut(auth);
+  };
+
+  const handleAbsenMasuk = async () => {
+    if (!profile) return;
+    setActionLoading(true);
+    try {
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      
+      let lat = 0, lng = 0;
+      try {
+        const pos: any = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+        });
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+      } catch (e) {
+        console.warn('Geolocation blocked or failed', e);
+      }
+      
+      const hour = now.getHours();
+      const status = hour >= 8 ? 'Terlambat' : 'Hadir';
+
+      const data = {
+        employeeId: auth.currentUser!.uid,
+        employeeName: profile.name,
+        branchId: profile.branchId,
+        date: todayStr,
+        checkInTime: now.toISOString(),
+        checkOutTime: null,
+        locationLat: lat,
+        locationLng: lng,
+        locationName: "Web Browser",
+        isFakeGps: false,
+        status: status,
+      };
+
+      const docRef = await addDoc(collection(db, 'attendance'), data);
+      
+      const newAtt = { id: docRef.id, ...data };
+      setTodayAttendance(newAtt);
+      setHistory(prev => [newAtt, ...prev].slice(0, 5));
+      alert("Berhasil Absen Masuk!");
+    } catch (e: any) {
+      alert("Gagal absen: " + e.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAbsenPulang = async () => {
+    if (!todayAttendance) return;
+    setActionLoading(true);
+    try {
+      const now = new Date().toISOString();
+      await updateDoc(doc(db, 'attendance', todayAttendance.id), {
+        checkOutTime: now
+      });
+      setTodayAttendance((prev: any) => ({ ...prev, checkOutTime: now }));
+      setHistory(prev => prev.map(a => a.id === todayAttendance.id ? { ...a, checkOutTime: now } : a));
+      alert("Berhasil Absen Pulang!");
+    } catch (e: any) {
+      alert("Gagal absen: " + e.message);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (loading) return <div className="h-screen flex items-center justify-center">Memuat data pegawai...</div>;
@@ -67,12 +140,61 @@ export default function EmployeeDashboard() {
 
       <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-6">
         <div className="bg-white shadow rounded-xl p-6 flex items-center space-x-4 border border-gray-100">
-          <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center">
+          <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
             <User className="h-8 w-8 text-primary" />
           </div>
-          <div>
+          <div className="flex-1">
             <h2 className="text-2xl font-bold text-gray-900">{profile?.name || 'Pegawai'}</h2>
             <p className="text-gray-500">{profile?.role || '-'} • {profile?.phone || '-'}</p>
+          </div>
+        </div>
+
+        {/* Absensi Card */}
+        <div className="bg-white shadow rounded-xl p-6 border border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Status Kehadiran Hari Ini</h3>
+            <p className="text-sm text-gray-500">
+              {new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </p>
+          </div>
+          
+          <div className="flex w-full sm:w-auto gap-4">
+            {!todayAttendance ? (
+              <button
+                onClick={handleAbsenMasuk}
+                disabled={actionLoading}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none transition-colors disabled:opacity-50"
+              >
+                <Fingerprint className="w-5 h-5 mr-2" />
+                {actionLoading ? 'Memproses...' : 'Absen Masuk'}
+              </button>
+            ) : !todayAttendance.checkOutTime ? (
+              <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
+                <div className="flex items-center text-sm font-medium text-green-700 bg-green-50 px-4 py-2 rounded-lg border border-green-200">
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Masuk: {new Date(todayAttendance.checkInTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <button
+                  onClick={handleAbsenPulang}
+                  disabled={actionLoading}
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none transition-colors disabled:opacity-50"
+                >
+                  <Clock className="w-5 h-5 mr-2" />
+                  {actionLoading ? 'Memproses...' : 'Absen Pulang'}
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
+                <div className="flex items-center text-sm font-medium text-green-700 bg-green-50 px-4 py-2 rounded-lg border border-green-200">
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Masuk: {new Date(todayAttendance.checkInTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <div className="flex items-center text-sm font-medium text-blue-700 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Pulang: {new Date(todayAttendance.checkOutTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
