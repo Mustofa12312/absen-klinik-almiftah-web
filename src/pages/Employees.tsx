@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Search, Smartphone, ShieldAlert, Edit2, MoreVertical, ShieldCheck, Upload, X } from 'lucide-react';
+import { Plus, Search, Smartphone, ShieldAlert, Edit2, MoreVertical, ShieldCheck, Upload, Download, X } from 'lucide-react';
 import { AdminServices } from '../lib/services';
 import type { Employee, Branch } from '../lib/services';
 
@@ -45,9 +45,105 @@ export default function Employees() {
   const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      alert(`Berhasil mensimulasikan import file: ${file.name}`);
-      event.target.value = ''; // reset
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const text = e.target?.result as string;
+          if (!text) return;
+          
+          const lines = text.split('\n').filter(line => line.trim() !== '');
+          if (lines.length < 2) {
+            alert('File CSV kosong atau tidak valid. Pastikan ada baris header.');
+            return;
+          }
+          
+          // Parse header
+          const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+          const nameIndex = headers.findIndex(h => h.includes('nama') || h === 'name');
+          const roleIndex = headers.findIndex(h => h.includes('role') || h === 'posisi');
+          const branchIdIndex = headers.findIndex(h => h.includes('branch') || h.includes('cabang'));
+          const strIndex = headers.findIndex(h => h.includes('str'));
+          
+          if (nameIndex === -1 || roleIndex === -1 || branchIdIndex === -1) {
+            alert('Format CSV tidak valid. Pastikan kolom Nama, Role, dan Branch ID/Cabang ada.');
+            return;
+          }
+
+          const parseCSVRow = (rowText: string) => {
+            // Simple split by comma, ignoring commas inside quotes is complex without library,
+            // we will use a basic regex to handle quotes
+            const re = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+            return rowText.split(re).map(v => v.replace(/^"|"$/g, '').trim());
+          };
+
+          const newEmployees: Omit<Employee, 'id'>[] = [];
+          for (let i = 1; i < lines.length; i++) {
+            const row = parseCSVRow(lines[i]);
+            if (row.length === 0 || !row[nameIndex]) continue;
+            
+            const branchIdValue = row[branchIdIndex] || branches[0]?.id || '';
+            const matchingBranch = branches.find(b => b.id === branchIdValue || b.code === branchIdValue || b.name === branchIdValue);
+            
+            newEmployees.push({
+              name: row[nameIndex] || 'Unnamed',
+              role: row[roleIndex] || 'Staff',
+              branchId: matchingBranch ? matchingBranch.id! : branches[0]?.id || '',
+              status: 'active',
+              deviceBound: false,
+              strNumber: strIndex !== -1 ? row[strIndex] : undefined,
+            });
+          }
+          
+          if (newEmployees.length === 0) {
+            alert('Tidak ada data pegawai valid untuk diimport.');
+            return;
+          }
+
+          setIsSubmitting(true);
+          await AdminServices.addEmployeesBulk(newEmployees);
+          alert(`Berhasil import ${newEmployees.length} pegawai!`);
+          fetchEmployees();
+        } catch (error) {
+          console.error(error);
+          alert('Terjadi kesalahan saat import CSV');
+        } finally {
+          setIsSubmitting(false);
+          if (fileInputRef.current) fileInputRef.current.value = ''; // reset
+        }
+      };
+      reader.readAsText(file);
     }
+  };
+
+  const handleExportCSV = () => {
+    if (employees.length === 0) {
+      alert('Tidak ada data untuk diexport');
+      return;
+    }
+    const headers = ['Nama', 'Posisi', 'Status', 'Cabang', 'No STR', 'Device Binding'];
+    const rows = employees.map(emp => [
+      emp.name,
+      emp.role,
+      emp.status,
+      emp.branchId,
+      emp.strNumber || '',
+      emp.deviceBound ? 'Terikat' : 'Belum Terikat'
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(val => `"${val}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'data_pegawai.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleAddEmployee = () => {
@@ -106,11 +202,19 @@ export default function Employees() {
             onChange={handleImportCSV} 
           />
           <button 
-            onClick={() => fileInputRef.current?.click()}
+            onClick={handleExportCSV}
             className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
           >
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </button>
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
+            disabled={isSubmitting}
+          >
             <Upload className="w-4 h-4 mr-2" />
-            Import CSV
+            {isSubmitting ? 'Importing...' : 'Import CSV'}
           </button>
           <button 
             onClick={handleAddEmployee}

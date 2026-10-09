@@ -78,6 +78,27 @@ export const AdminServices = {
     }
   },
 
+  async addEmployeesBulk(employeesData: Omit<Employee, 'id'>[]): Promise<void> {
+    try {
+      const { writeBatch, collection, doc } = await import('firebase/firestore');
+      const batch = writeBatch(db);
+      
+      // Limit to 500 per batch as per Firestore limits
+      for (let i = 0; i < employeesData.length; i += 500) {
+        const chunk = employeesData.slice(i, i + 500);
+        const currentBatch = writeBatch(db);
+        chunk.forEach(emp => {
+          const empRef = doc(collection(db, 'employees'));
+          currentBatch.set(empRef, emp);
+        });
+        await currentBatch.commit();
+      }
+    } catch (error) {
+      console.error("Gagal import pegawai:", error);
+      throw error;
+    }
+  },
+
   // --- EMPLOYEES ---
   async getEmployeesByBranch(branchId?: string): Promise<Employee[]> {
     try {
