@@ -24,6 +24,7 @@ export interface Employee {
   deviceId?: string;
   deviceName?: string;
   strNumber?: string;
+  phone?: string;
 }
 
 export interface Shift {

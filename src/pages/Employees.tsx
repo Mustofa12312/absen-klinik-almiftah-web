@@ -11,7 +11,7 @@ export default function Employees() {
   const [filterBranch, setFilterBranch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [employeeForm, setEmployeeForm] = useState({ name: '', role: 'Staff', branchId: '', strNumber: '' });
+  const [employeeForm, setEmployeeForm] = useState({ name: '', role: 'Staff', branchId: '', strNumber: '', phone: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -183,7 +183,7 @@ export default function Employees() {
 
   const handleAddEmployee = () => {
     setEditingId(null);
-    setEmployeeForm({ name: '', role: 'Staff', branchId: branches[0]?.id || '', strNumber: '' });
+    setEmployeeForm({ name: '', role: 'Staff', branchId: branches[0]?.id || '', strNumber: '', phone: '' });
     setIsModalOpen(true);
   };
 
@@ -193,7 +193,8 @@ export default function Employees() {
       name: emp.name,
       role: emp.role,
       branchId: emp.branchId,
-      strNumber: emp.strNumber || ''
+      strNumber: emp.strNumber || '',
+      phone: emp.phone || ''
     });
     setIsModalOpen(true);
   };
@@ -213,10 +214,11 @@ export default function Employees() {
           status: 'active',
           deviceBound: false,
           strNumber: employeeForm.strNumber || undefined,
+          phone: employeeForm.phone || undefined,
         });
       }
       setIsModalOpen(false);
-      setEmployeeForm({ name: '', role: 'Staff', branchId: branches[0]?.id || '', strNumber: '' });
+      setEmployeeForm({ name: '', role: 'Staff', branchId: branches[0]?.id || '', strNumber: '', phone: '' });
       fetchEmployees();
     } catch (err) {
       alert('Gagal menyimpan pegawai');
@@ -352,6 +354,7 @@ export default function Employees() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{emp.role}</div>
                     {emp.strNumber && <div className="text-xs text-gray-500 mt-1">STR: {emp.strNumber}</div>}
+                    {emp.phone && <div className="text-xs text-gray-500 mt-1">Telp: {emp.phone}</div>}
                     <div className="text-sm text-gray-500 mt-1">Cabang: {branchMap[emp.branchId] || emp.branchId}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -439,6 +442,17 @@ export default function Employees() {
                   onChange={e => setEmployeeForm({ ...employeeForm, strNumber: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
                   placeholder="Contoh: 1234567890"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nomor Telepon (Opsional)</label>
+                <input
+                  type="tel"
+                  value={employeeForm.phone}
+                  onChange={e => setEmployeeForm({ ...employeeForm, phone: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+                  placeholder="Contoh: 081234567890"
                 />
               </div>
 
