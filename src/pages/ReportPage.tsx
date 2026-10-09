@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Download, BarChart2, Filter } from 'lucide-react';
+import { Download, BarChart2, Filter, FileText, FileSpreadsheet } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -129,6 +132,47 @@ export default function ReportPage() {
     link.click();
   };
 
+  const exportPDF = () => {
+    const doc = new jsPDF('landscape');
+    
+    // Header text
+    doc.setFontSize(16);
+    doc.text(`Laporan Rekap Absensi Klinik Al-Miftah`, 14, 15);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Periode: ${period} | Cabang: ${branchFilter || 'Semua Cabang'}`, 14, 22);
+
+    const headers = [['Pegawai', 'Cabang', 'Shift', 'HK', 'Hadir', 'Tlt', 'Alfa', 'Izin', 'Skt', 'Cuti', 'Dinas', 'Plg Cepat']];
+    const rows = filtered.map(r => [
+      r.name, r.branchId, r.shift, 
+      r.workDays, r.present, r.late, r.absent, 
+      r.permission, r.sick, r.leave, r.businessTrip, r.earlyCheckout
+    ]);
+
+    autoTable(doc, {
+      head: headers,
+      body: rows,
+      startY: 28,
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [63, 81, 181] },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+    });
+
+    doc.save(`rekap_absensi_${period}.pdf`);
+  };
+
+  const exportExcel = () => {
+    const headers = ['Nama', 'Cabang', 'Shift', 'Hari Kerja', 'Hadir', 'Terlambat', 'Tidak Hadir', 'Izin', 'Sakit', 'Cuti', 'Dinas', 'Pulang Cepat'];
+    const rows = filtered.map(r => [r.name, r.branchId, r.shift, r.workDays, r.present, r.late, r.absent, r.permission, r.sick, r.leave, r.businessTrip, r.earlyCheckout]);
+    
+    // Gabungkan header dan baris
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const workbook = XLSX.utils.book_new();
+    
+    XLSX.utils.book_append_sheet(workbook, worksheet, `Rekap ${period}`);
+    XLSX.writeFile(workbook, `rekap_absensi_${period}.xlsx`);
+  };
+
   // Aggregate stats
   const totalPresent = filtered.reduce((a, r) => a + r.present, 0);
   const totalLate = filtered.reduce((a, r) => a + r.late, 0);
@@ -142,13 +186,29 @@ export default function ReportPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Rekap & Laporan</h1>
           <p className="mt-1 text-sm text-gray-500">Ringkasan kehadiran bulanan per pegawai. Ekspor ke CSV/Excel (PRD-40, PRD-60).</p>
         </div>
-        <button
-          onClick={exportCSV}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-primary/90 transition-colors"
-        >
-          <Download className="w-4 h-4" />
-          Export CSV
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={exportCSV}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            CSV
+          </button>
+          <button
+            onClick={exportExcel}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg shadow-sm text-white bg-green-600 hover:bg-green-700 transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Excel
+          </button>
+          <button
+            onClick={exportPDF}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg shadow-sm text-white bg-red-600 hover:bg-red-700 transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            PDF
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
