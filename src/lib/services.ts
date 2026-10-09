@@ -26,6 +26,15 @@ export interface Employee {
   strNumber?: string;
 }
 
+export interface Shift {
+  id?: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  tolerance: number; // minutes
+  crossesMidnight: boolean;
+}
+
 export const AdminServices = {
   // --- BRANCHES ---
   async getBranches(): Promise<Branch[]> {
@@ -145,6 +154,40 @@ export const AdminServices = {
       await updateDoc(reqRef, { status });
     } catch (error) {
       console.error("Gagal update status pengajuan:", error);
+      throw error;
+    }
+  },
+
+  // --- SHIFTS ---
+  async addShift(shiftData: Omit<Shift, 'id'>): Promise<void> {
+    try {
+      const { addDoc, collection } = await import('firebase/firestore');
+      await addDoc(collection(db, 'shifts'), shiftData);
+    } catch (error) {
+      console.error("Gagal menambah shift:", error);
+      throw error;
+    }
+  },
+
+  async addShiftsBulk(shiftsData: Partial<Shift>[]): Promise<void> {
+    try {
+      const { writeBatch, collection, doc } = await import('firebase/firestore');
+      const batch = writeBatch(db);
+      
+      for (const shift of shiftsData) {
+        if (shift.id) {
+          const shiftRef = doc(db, 'shifts', shift.id);
+          const { id, ...updateData } = shift;
+          batch.set(shiftRef, updateData, { merge: true });
+        } else {
+          const newDocRef = doc(collection(db, 'shifts'));
+          batch.set(newDocRef, shift);
+        }
+      }
+      
+      await batch.commit();
+    } catch (error) {
+      console.error("Gagal menambah shift massal:", error);
       throw error;
     }
   }
