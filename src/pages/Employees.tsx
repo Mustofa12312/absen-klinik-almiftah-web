@@ -277,7 +277,7 @@ export default function Employees() {
           <h1 className="text-2xl font-semibold text-gray-900">Manajemen Pegawai</h1>
           <p className="mt-1 text-sm text-gray-500">Kelola data pegawai, status aktif, dan Device Binding.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full sm:w-auto mt-4 sm:mt-0">
           <input 
             type="file" 
             accept=".csv, .xlsx" 
@@ -287,21 +287,21 @@ export default function Employees() {
           />
           <button 
             onClick={handleDownloadTemplate}
-            className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
+            className="inline-flex items-center justify-center px-2 sm:px-4 py-2 border border-gray-300 text-xs sm:text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
           >
             <FileText className="w-4 h-4 mr-2" />
             Template CSV
           </button>
           <button 
             onClick={handleExportCSV}
-            className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
+            className="inline-flex items-center justify-center px-2 sm:px-4 py-2 border border-gray-300 text-xs sm:text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
           >
             <Download className="w-4 h-4 mr-2" />
             Export CSV
           </button>
           <button 
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
+            className="inline-flex items-center justify-center px-2 sm:px-4 py-2 border border-gray-300 text-xs sm:text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
             disabled={isSubmitting || isGeneratingAuth}
           >
             <Upload className="w-4 h-4 mr-2" />
@@ -312,7 +312,7 @@ export default function Employees() {
             <button 
               onClick={handleGenerateAuth}
               disabled={isSubmitting || isGeneratingAuth}
-              className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-amber-600 hover:bg-amber-700 focus:outline-none transition-colors disabled:opacity-50"
+              className="inline-flex items-center justify-center px-2 sm:px-4 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-lg shadow-sm text-white bg-amber-600 hover:bg-amber-700 focus:outline-none transition-colors disabled:opacity-50 col-span-2 sm:col-span-1"
             >
               <ShieldAlert className="w-4 h-4 mr-2" />
               {isGeneratingAuth ? 'Memproses...' : 'Buat Akun Login'}
@@ -321,7 +321,7 @@ export default function Employees() {
 
           <button 
             onClick={handleAddEmployee}
-            className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+            className="inline-flex items-center justify-center px-2 sm:px-4 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors col-span-2 sm:col-span-1"
           >
             <Plus className="w-4 h-4 mr-2" />
             Tambah Pegawai
