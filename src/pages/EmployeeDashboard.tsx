@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc } from 'firebase/firestore';
-import { LogOut, User, MapPin, Calendar, Clock, Fingerprint, CheckCircle2 } from 'lucide-react';
+import { LogOut, User, MapPin, Calendar, Clock, Fingerprint, CheckCircle2, FileText, X } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 
 export default function EmployeeDashboard() {
@@ -10,6 +10,15 @@ export default function EmployeeDashboard() {
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  
+  // Request Modal State
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestForm, setRequestForm] = useState({
+    type: 'Izin',
+    startDate: '',
+    endDate: '',
+    reason: ''
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -117,6 +126,34 @@ export default function EmployeeDashboard() {
     }
   };
 
+  const handleSubmitRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile) return;
+    setActionLoading(true);
+    try {
+      const { addDoc, collection } = await import('firebase/firestore');
+      await addDoc(collection(db, 'leave_requests'), {
+        employeeId: auth.currentUser!.uid,
+        employeeName: profile.name,
+        branchId: profile.branchId,
+        type: requestForm.type,
+        date: requestForm.startDate,
+        startDate: requestForm.startDate,
+        endDate: requestForm.endDate || requestForm.startDate,
+        reason: requestForm.reason,
+        status: 'PENDING',
+        createdAt: new Date().toISOString()
+      });
+      alert('Pengajuan berhasil dikirim!');
+      setShowRequestModal(false);
+      setRequestForm({ type: 'Izin', startDate: '', endDate: '', reason: '' });
+    } catch (e: any) {
+      alert("Gagal mengirim pengajuan: " + e.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   if (loading) return <div className="h-screen flex items-center justify-center">Memuat data pegawai...</div>;
 
   return (
@@ -199,8 +236,15 @@ export default function EmployeeDashboard() {
         </div>
 
         <div className="bg-white shadow rounded-xl overflow-hidden border border-gray-100">
-          <div className="px-6 py-5 border-b border-gray-200">
+          <div className="px-6 py-5 border-b border-gray-200 flex justify-between items-center">
             <h3 className="text-lg font-medium text-gray-900">Riwayat Absensi Terakhir</h3>
+            <button
+              onClick={() => setShowRequestModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Buat Pengajuan
+            </button>
           </div>
           <div className="divide-y divide-gray-200">
             {history.length === 0 ? (
@@ -234,10 +278,102 @@ export default function EmployeeDashboard() {
           </div>
         </div>
         
+        
         <div className="text-center mt-8 text-sm text-gray-400">
-          Untuk melakukan absensi dan pengajuan cuti, silakan gunakan Aplikasi Android Klinik Al-Miftah.
+          Aplikasi Android Klinik Al-Miftah tetap disarankan untuk pengalaman penuh (Anti Fake-GPS).
         </div>
       </main>
+
+      {/* Request Modal */}
+      {showRequestModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowRequestModal(false)} />
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+            <div className="relative inline-block align-bottom bg-white rounded-2xl px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+              <div className="absolute top-0 right-0 pt-4 pr-4">
+                <button
+                  type="button"
+                  onClick={() => setShowRequestModal(false)}
+                  className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              <div className="sm:flex sm:items-start">
+                <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Buat Pengajuan</h3>
+                  <form onSubmit={handleSubmitRequest} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Jenis Pengajuan</label>
+                      <select
+                        required
+                        value={requestForm.type}
+                        onChange={e => setRequestForm({ ...requestForm, type: e.target.value })}
+                        className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md"
+                      >
+                        <option value="Izin">Izin</option>
+                        <option value="Sakit">Sakit</option>
+                        <option value="Cuti">Cuti</option>
+                        <option value="Dinas">Dinas Luar</option>
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Tanggal Mulai</label>
+                        <input
+                          type="date"
+                          required
+                          value={requestForm.startDate}
+                          onChange={e => setRequestForm({ ...requestForm, startDate: e.target.value })}
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Tanggal Selesai</label>
+                        <input
+                          type="date"
+                          required
+                          value={requestForm.endDate}
+                          onChange={e => setRequestForm({ ...requestForm, endDate: e.target.value })}
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Alasan</label>
+                      <textarea
+                        required
+                        rows={3}
+                        value={requestForm.reason}
+                        onChange={e => setRequestForm({ ...requestForm, reason: e.target.value })}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                        placeholder="Tuliskan alasan pengajuan..."
+                      />
+                    </div>
+                    <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                      <button
+                        type="submit"
+                        disabled={actionLoading}
+                        className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary text-base font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                      >
+                        {actionLoading ? 'Menyimpan...' : 'Kirim Pengajuan'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowRequestModal(false)}
+                        className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
