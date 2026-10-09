@@ -99,7 +99,7 @@ export const AdminServices = {
 
   async addEmployeeAndAuth(employeeData: Omit<Employee, 'id'>): Promise<void> {
     try {
-      const email = `${employeeData.strNumber || employeeData.phone || 'baru'}@almiftah.com`.toLowerCase();
+      const email = `${employeeData.phone || employeeData.strNumber || 'baru'}@almiftah.com`.toLowerCase().replace(/\s+/g, '');
       const password = 'Klinik123';
       
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
@@ -165,7 +165,8 @@ export const AdminServices = {
       // If it's already 28 chars, it might already have an Auth account
       if (empId.length >= 28) continue; 
 
-      const email = `${data.strNumber || data.phone || empId.substring(0,8)}@almiftah.com`.toLowerCase();
+      // Prioritize phone number for login!
+      const email = `${data.phone || data.strNumber || empId.substring(0,8)}@almiftah.com`.toLowerCase().replace(/\s+/g, '');
       const password = 'Klinik123'; // Default password
 
       try {
