@@ -17,6 +17,7 @@ export default function Requests() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -71,10 +72,12 @@ export default function Requests() {
     }
   };
 
-  const filtered = requests.filter(r => 
-    r.employeeName.toLowerCase().includes(search.toLowerCase()) || 
-    r.type.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = requests.filter(r => {
+    const matchSearch = r.employeeName.toLowerCase().includes(search.toLowerCase()) || 
+      r.type.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = filterStatus ? r.status === filterStatus : true;
+    return matchSearch && matchStatus;
+  });
 
   return (
     <div className="space-y-6">
@@ -101,11 +104,15 @@ export default function Requests() {
           </div>
           
           <div className="flex gap-2">
-            <select className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-lg border">
-              <option>Semua Status</option>
-              <option>PENDING</option>
-              <option>APPROVED</option>
-              <option>REJECTED</option>
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-lg border"
+            >
+              <option value="">Semua Status</option>
+              <option value="PENDING">Menunggu</option>
+              <option value="APPROVED">Disetujui</option>
+              <option value="REJECTED">Ditolak</option>
             </select>
           </div>
         </div>

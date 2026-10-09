@@ -8,6 +8,7 @@ export default function Employees() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [filterBranch, setFilterBranch] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newEmployee, setNewEmployee] = useState({ name: '', role: 'Staff', branchId: '', strNumber: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -217,7 +218,13 @@ export default function Employees() {
     }
   };
 
-  const filtered = employees.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
+  const branchMap = Object.fromEntries(branches.map(b => [b.id, b.name]));
+
+  const filtered = employees.filter(e => {
+    const matchSearch = e.name.toLowerCase().includes(search.toLowerCase());
+    const matchBranch = filterBranch ? e.branchId === filterBranch : true;
+    return matchSearch && matchBranch;
+  });
 
   return (
     <div className="space-y-6">
@@ -282,10 +289,15 @@ export default function Employees() {
           </div>
           
           <div className="flex gap-2">
-            <select className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-lg border">
-              <option>Semua Cabang</option>
-              <option>HQ-01</option>
-              <option>BR-02</option>
+            <select
+              value={filterBranch}
+              onChange={e => setFilterBranch(e.target.value)}
+              className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-lg border"
+            >
+              <option value="">Semua Cabang</option>
+              {branches.map(b => (
+                <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+              ))}
             </select>
           </div>
         </div>
@@ -322,7 +334,7 @@ export default function Employees() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{emp.role}</div>
                     {emp.strNumber && <div className="text-xs text-gray-500 mt-1">STR: {emp.strNumber}</div>}
-                    <div className="text-sm text-gray-500 mt-1">Cabang: {emp.branchId}</div>
+                    <div className="text-sm text-gray-500 mt-1">Cabang: {branchMap[emp.branchId] || emp.branchId}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${

@@ -32,56 +32,65 @@ export default function ReportPage() {
       setLoading(true);
       try {
         const [year, month] = period.split('-');
-        const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-        const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59);
+        const startDate = `${year}-${month}-01`;
+        // Last day of the month
+        const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+        const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
 
-        // This is a simplified client-side aggregation.
-        // In a real production app with many records, this should be done in Cloud Functions.
+        // Calculate actual work days (Mon-Fri) for the month
+        let workDays = 0;
+        const d = new Date(parseInt(year), parseInt(month) - 1, 1);
+        while (d.getMonth() === parseInt(month) - 1) {
+          const day = d.getDay();
+          if (day !== 0 && day !== 6) workDays++;
+          d.setDate(d.getDate() + 1);
+        }
+
         const empSnap = await getDocs(collection(db, 'employees'));
         const employees: any[] = [];
         empSnap.forEach(doc => {
           employees.push({ id: doc.id, ...doc.data() });
         });
 
-        // We fetch attendance for the period to calculate counts
+        // Query attendance menggunakan workDate (field string) bukan checkInTime (Timestamp)
         const attQuery = query(
           collection(db, 'attendance'),
-          where('checkInTime', '>=', startDate),
-          where('checkInTime', '<=', endDate)
+          where('workDate', '>=', startDate),
+          where('workDate', '<=', endDate)
         );
         const attSnap = await getDocs(attQuery);
         
         const atts: any[] = [];
         attSnap.forEach(doc => atts.push(doc.data()));
 
-        const reqQuery = query(
-          collection(db, 'requests'),
-          where('createdAt', '>=', startDate),
-          where('createdAt', '<=', endDate)
+        // Query leave_requests dan correction_requests, bukan 'requests'
+        const leaveQuery = query(
+          collection(db, 'leave_requests'),
+          where('startDate', '>=', startDate),
+          where('startDate', '<=', endDate)
         );
-        const reqSnap = await getDocs(reqQuery);
-        const requests: any[] = [];
-        reqSnap.forEach(doc => requests.push(doc.data()));
+        const leaveSnap = await getDocs(leaveQuery);
+        const leaveRequests: any[] = [];
+        leaveSnap.forEach(doc => leaveRequests.push({ id: doc.id, ...doc.data() }));
 
         const data: ReportRow[] = employees.map(emp => {
           const empAtts = atts.filter(a => a.employeeId === emp.id);
-          const empReqs = requests.filter(r => r.employeeId === emp.id && r.status === 'approved');
+          // Status UPPERCASE sesuai dengan yang disimpan di Firestore
+          const empLeaves = leaveRequests.filter(r => r.employeeId === emp.id && r.status === 'APPROVED');
 
           const present = empAtts.filter(a => a.status === 'present').length;
           const late = empAtts.filter(a => a.status === 'late').length;
-          const permission = empReqs.filter(r => r.type === 'izin').length;
-          const sick = empReqs.filter(r => r.type === 'sakit').length;
-          const leave = empReqs.filter(r => r.type === 'cuti').length;
-          const businessTrip = empReqs.filter(r => r.type === 'dinas').length;
-          const earlyCheckout = empAtts.filter(a => a.earlyCheckout).length;
-
-          // Approx work days for the month without weekends
-          let workDays = 22;
+          const earlyCheckout = empAtts.filter(a => a.status === 'early_checkout').length;
+          // Tipe Title Case sesuai yang disimpan di Flutter app
+          const permission = empLeaves.filter(r => r.type === 'Izin').length;
+          const sick = empLeaves.filter(r => r.type === 'Sakit').length;
+          const leave = empLeaves.filter(r => r.type === 'Cuti').length;
+          const businessTrip = empLeaves.filter(r => r.type === 'Dinas').length;
 
           return {
             name: emp.name,
             branchId: emp.branchId || '-',
-            shift: emp.shiftId || 'Pagi', // Just a fallback if no shift is assigned
+            shift: emp.shiftId || 'Default',
             workDays,
             present,
             late,

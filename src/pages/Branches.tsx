@@ -34,7 +34,8 @@ export default function Branches() {
           code: d.code || doc.id,
           address: d.address || '-',
           radius: d.radius || 0,
-          status: d.isActive === false ? 'inactive' : 'active',
+          // Gunakan field 'status' yang konsisten dengan services.ts Branch interface
+          status: d.status === 'inactive' ? 'inactive' : 'active',
         });
       });
       setBranches(data);

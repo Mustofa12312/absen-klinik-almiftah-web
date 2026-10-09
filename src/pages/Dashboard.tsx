@@ -6,7 +6,7 @@ import { auth, db } from '../lib/firebase';
 import { 
   LayoutDashboard, Users, MapPin, Clock, Calendar, ShieldAlert,
   LogOut, Building2, FileCheck2, Menu, Smartphone, ClipboardList,
-  Activity, AlertCircle, CheckCircle2, UserX, Stethoscope, BarChart2
+  Activity, AlertCircle, CheckCircle2, UserX, Stethoscope, BarChart2, X
 } from 'lucide-react';
 
 import Branches from './Branches';
@@ -109,7 +109,7 @@ export default function Dashboard() {
             <span className="font-semibold text-gray-900">Al-Miftah Admin</span>
           </div>
           <button onClick={() => setIsSidebarOpen(false)} className="text-gray-500 hover:text-gray-700">
-            <UserX className="h-5 w-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
@@ -209,7 +209,16 @@ function Overview() {
     securityEvents: '...',
     pending: '...',
   });
+  const [branches, setBranches] = useState<{ id: string; name: string; code: string }[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState('');
   
+  useEffect(() => {
+    // Fetch branches for filter dropdown
+    getDocs(collection(db, 'branches')).then(snap => {
+      setBranches(snap.docs.map(d => ({ id: d.id, name: d.data().name, code: d.data().code })));
+    }).catch(console.error);
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -221,7 +230,9 @@ function Overview() {
         let totalActive = 0;
         let inactive = 0;
         empSnap.forEach(doc => {
-          if (doc.data().isActive === false) inactive++;
+          const d = doc.data();
+          // Konsisten: gunakan field 'status' bukan 'isActive'
+          if (d.status === 'inactive') inactive++;
           else totalActive++;
         });
 
@@ -256,13 +267,15 @@ function Overview() {
           if (doc.data().status === 'PENDING') pending++;
         });
 
-        // 4. Security Events
+        // 4. Security Events — field 'createdAt' bukan 'timestamp'
         const secSnap = await getDocs(collection(db, 'security_events'));
         let secEvents = 0;
         secSnap.forEach(doc => {
           const d = doc.data();
-          if (d.timestamp) {
-            const tsDate = d.timestamp.toDate ? d.timestamp.toDate() : new Date(d.timestamp);
+          // Coba field createdAt (Timestamp Firestore) atau timestamp
+          const tsRaw = d.createdAt || d.timestamp;
+          if (tsRaw) {
+            const tsDate = tsRaw.toDate ? tsRaw.toDate() : new Date(tsRaw);
             if (tsDate.toISOString().split('T')[0] === todayStr) secEvents++;
           }
         });
@@ -288,7 +301,7 @@ function Overview() {
       }
     };
     fetchData();
-  }, []);
+  }, [selectedBranch]);
 
   const stats = [
     { title: 'Total Pegawai',    value: data.totalEmployees,  subtitle: 'Terdaftar',                 icon: Users,         color: 'text-blue-600',   bg: 'bg-blue-50' },
@@ -309,12 +322,19 @@ function Overview() {
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Ringkasan Hari Ini</h1>
-          <p className="text-sm text-gray-500 mt-1">Senin, 05 Oktober 2026 — Semua Cabang</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} — Semua Cabang
+          </p>
         </div>
-        <select className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary">
-          <option>Semua Cabang</option>
-          <option>HQ-01 Pusat</option>
-          <option>BR-02 Selatan</option>
+        <select
+          value={selectedBranch}
+          onChange={e => setSelectedBranch(e.target.value)}
+          className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="">Semua Cabang</option>
+          {branches.map(b => (
+            <option key={b.id} value={b.id}>{b.code} — {b.name}</option>
+          ))}
         </select>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

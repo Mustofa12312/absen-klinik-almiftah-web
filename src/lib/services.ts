@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, updateDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, addDoc, writeBatch, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 
 // Interfaces
@@ -49,10 +49,19 @@ export const AdminServices = {
 
   async addBranch(branchData: Omit<Branch, 'id'>): Promise<void> {
     try {
-      const { addDoc, collection } = await import('firebase/firestore');
       await addDoc(collection(db, 'branches'), branchData);
     } catch (error) {
       console.error("Gagal menambah cabang:", error);
+      throw error;
+    }
+  },
+
+  async updateBranch(branchId: string, data: Partial<Omit<Branch, 'id'>>): Promise<void> {
+    try {
+      const branchRef = doc(db, 'branches', branchId);
+      await updateDoc(branchRef, data);
+    } catch (error) {
+      console.error("Gagal update cabang:", error);
       throw error;
     }
   },
@@ -79,7 +88,6 @@ export const AdminServices = {
 
   async addEmployee(employeeData: Omit<Employee, 'id'>): Promise<void> {
     try {
-      const { addDoc, collection } = await import('firebase/firestore');
       await addDoc(collection(db, 'employees'), employeeData);
     } catch (error) {
       console.error("Gagal menambah pegawai:", error);
@@ -87,10 +95,18 @@ export const AdminServices = {
     }
   },
 
+  async updateEmployee(employeeId: string, data: Partial<Omit<Employee, 'id'>>): Promise<void> {
+    try {
+      const empRef = doc(db, 'employees', employeeId);
+      await updateDoc(empRef, data);
+    } catch (error) {
+      console.error("Gagal update pegawai:", error);
+      throw error;
+    }
+  },
+
   async addEmployeesBulk(employeesData: Partial<Employee>[]): Promise<void> {
     try {
-      const { writeBatch, collection, doc } = await import('firebase/firestore');
-      
       // Limit to 500 per batch as per Firestore limits
       for (let i = 0; i < employeesData.length; i += 500) {
         const chunk = employeesData.slice(i, i + 500);
@@ -99,8 +115,7 @@ export const AdminServices = {
           if (emp.id) {
             // Update existing
             const empRef = doc(db, 'employees', emp.id);
-            const dataToUpdate = { ...emp };
-            delete dataToUpdate.id; // don't write id field explicitly if not needed, though fine if we do
+            const { id: _id, ...dataToUpdate } = emp;
             currentBatch.set(empRef, dataToUpdate, { merge: true });
           } else {
             // Create new
@@ -161,7 +176,6 @@ export const AdminServices = {
   // --- SHIFTS ---
   async addShift(shiftData: Omit<Shift, 'id'>): Promise<void> {
     try {
-      const { addDoc, collection } = await import('firebase/firestore');
       await addDoc(collection(db, 'shifts'), shiftData);
     } catch (error) {
       console.error("Gagal menambah shift:", error);
@@ -171,13 +185,12 @@ export const AdminServices = {
 
   async addShiftsBulk(shiftsData: Partial<Shift>[]): Promise<void> {
     try {
-      const { writeBatch, collection, doc } = await import('firebase/firestore');
       const batch = writeBatch(db);
       
       for (const shift of shiftsData) {
         if (shift.id) {
           const shiftRef = doc(db, 'shifts', shift.id);
-          const { id, ...updateData } = shift;
+          const { id: _id, ...updateData } = shift;
           batch.set(shiftRef, updateData, { merge: true });
         } else {
           const newDocRef = doc(collection(db, 'shifts'));
@@ -191,4 +204,24 @@ export const AdminServices = {
       throw error;
     }
   }
+};
+
+// --- HOLIDAYS ---
+export const HolidayServices = {
+  async addHoliday(data: { date: string; name: string; description: string; scope: string }): Promise<void> {
+    try {
+      await addDoc(collection(db, 'holidays'), { ...data, isActive: true });
+    } catch (error) {
+      console.error("Gagal menambah hari libur:", error);
+      throw error;
+    }
+  },
+  async updateHoliday(id: string, data: Partial<{ date: string; name: string; description: string; scope: string; isActive: boolean }>): Promise<void> {
+    try {
+      await updateDoc(doc(db, 'holidays', id), data);
+    } catch (error) {
+      console.error("Gagal update hari libur:", error);
+      throw error;
+    }
+  },
 };

@@ -123,9 +123,9 @@ export default function DeviceManagement() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
-                <tr><td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-400">Memuat data perangkat...</td></tr>
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-sm text-gray-400">Memuat data perangkat...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-400">Tidak ada perangkat ditemukan.</td></tr>
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-sm text-gray-400">Tidak ada perangkat ditemukan.</td></tr>
               ) : filtered.map((dev) => (
                 <tr key={dev.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">

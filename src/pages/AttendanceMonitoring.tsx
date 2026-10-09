@@ -71,7 +71,8 @@ export default function AttendanceMonitoring() {
           }
 
           let status = d.status || 'present';
-          if (d.lateMinutes > 0) status = 'late';
+          // Hanya override ke 'late' jika record ini adalah attendance biasa (bukan leave)
+          if (status === 'present' && (d.lateMinutes > 0)) status = 'late';
           
           data.push({
             id: doc.id,
