@@ -57,8 +57,11 @@ export default function Employees() {
             return;
           }
           
+          // Detect delimiter
+          const delimiter = lines[0].includes(';') ? ';' : ',';
+          
           // Parse header
-          const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+          const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase().replace(/"/g, ''));
           const idIndex = headers.findIndex(h => h === 'id' || h.includes('id pegawai') || h.includes('id ('));
           const nameIndex = headers.findIndex(h => h.includes('nama') || h === 'name');
           const roleIndex = headers.findIndex(h => h.includes('role') || h === 'posisi');
@@ -66,14 +69,12 @@ export default function Employees() {
           const strIndex = headers.findIndex(h => h.includes('str'));
           
           if (nameIndex === -1 || roleIndex === -1 || branchIdIndex === -1) {
-            alert('Format CSV tidak valid. Pastikan kolom Nama, Role/Posisi, dan Branch ID/Cabang ada.');
+            alert('Format CSV tidak valid. Pastikan kolom Nama, Role/Posisi, dan Branch ID/Cabang ada. (Gunakan pemisah koma atau titik koma)');
             return;
           }
 
           const parseCSVRow = (rowText: string) => {
-            // Simple split by comma, ignoring commas inside quotes is complex without library,
-            // we will use a basic regex to handle quotes
-            const re = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+            const re = delimiter === ';' ? /;(?=(?:(?:[^"]*"){2})*[^"]*$)/ : /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
             return rowText.split(re).map(v => v.replace(/^"|"$/g, '').trim());
           };
 
