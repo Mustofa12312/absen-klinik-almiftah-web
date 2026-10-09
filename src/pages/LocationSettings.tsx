@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MapPin, Search, Edit2, Plus, MoreVertical, X, Crosshair, ClipboardPaste } from 'lucide-react';
+import { MapPin, Search, Edit2, Plus, MoreVertical, X, Crosshair, ClipboardPaste, ExternalLink } from 'lucide-react';
 import { AdminServices } from '../lib/services';
 import type { Branch } from '../lib/services';
 
@@ -58,9 +58,9 @@ export default function LocationSettings() {
       });
       await fetchBranches();
       setEditingBranch(null);
-    } catch (error) {
-      console.error(error);
-      alert('Gagal menyimpan lokasi');
+    } catch (err: any) {
+      console.error(err);
+      alert('Gagal menyimpan lokasi: ' + (err.message || 'Kesalahan tidak diketahui'));
     } finally {
       setIsSaving(false);
     }
@@ -200,9 +200,22 @@ export default function LocationSettings() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-xs font-mono text-gray-700 bg-gray-50 rounded px-2 py-1 border">
-                        <div>Lat: {loc.latitude ? loc.latitude.toFixed(6) : "Belum diset"}</div>
-                        <div>Lng: {loc.longitude ? loc.longitude.toFixed(6) : "Belum diset"}</div>
+                      <div className="flex flex-col gap-2">
+                        <div className="text-xs font-mono text-gray-700 bg-gray-50 rounded px-2 py-1 border inline-block w-max">
+                          <div>Lat: {loc.latitude ? loc.latitude.toFixed(6) : "Belum diset"}</div>
+                          <div>Lng: {loc.longitude ? loc.longitude.toFixed(6) : "Belum diset"}</div>
+                        </div>
+                        {loc.latitude && loc.longitude && (
+                          <a 
+                            href={`https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Cek di Maps
+                          </a>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
