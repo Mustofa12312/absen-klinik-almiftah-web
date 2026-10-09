@@ -1,5 +1,5 @@
 import { collection, getDocs, doc, updateDoc, addDoc, writeBatch, query, where, setDoc, deleteDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { db, secondaryAuth } from './firebase';
 
 // Interfaces
@@ -170,8 +170,19 @@ export const AdminServices = {
       const password = 'Klinik123'; // Default password
 
       try {
-        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-        const newUid = userCredential.user.uid;
+        let newUid = '';
+        try {
+          const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+          newUid = userCredential.user.uid;
+        } catch (authErr: any) {
+          if (authErr.code === 'auth/email-already-in-use') {
+            // Already created, just login to get the UID
+            const userCredential = await signInWithEmailAndPassword(secondaryAuth, email, password);
+            newUid = userCredential.user.uid;
+          } else {
+            throw authErr;
+          }
+        }
         
         // Create new doc with Auth uid
         await setDoc(doc(db, 'employees', newUid), {
@@ -179,8 +190,14 @@ export const AdminServices = {
           email: email
         });
 
-        // Delete old doc
-        await deleteDoc(doc(db, 'employees', empId));
+        // Try to delete old doc. If it fails due to permissions, mark it as migrated
+        try {
+          await deleteDoc(doc(db, 'employees', empId));
+        } catch (delErr) {
+          console.warn("Could not delete old doc, marking as migrated", delErr);
+          await updateDoc(doc(db, 'employees', empId), { migrated: true });
+        }
+        
         successCount++;
       } catch (err: any) {
         console.error(`Gagal membuat auth untuk ${data.name}:`, err);
@@ -199,7 +216,8 @@ export const AdminServices = {
         q = query(q, where("branchId", "==", branchId));
       }
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee));
+      const employees = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee));
+      return employees.filter(e => !(e as any).migrated);
     } catch (error) {
       console.error("Gagal mengambil data pegawai:", error);
       throw error;
