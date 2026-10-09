@@ -26,11 +26,10 @@ export default function Login() {
       const userDoc = await getDoc(doc(db, 'users', uid));
       
       if (!userDoc.exists() || userDoc.data()?.role !== 'super_admin') {
-        await auth.signOut();
-        throw new Error("Akses Ditolak: Anda mencoba login dengan akun Pegawai ke Portal Admin. Silakan gunakan Aplikasi Android khusus Pegawai.");
+        navigate('/employee-dashboard');
+      } else {
+        navigate('/dashboard');
       }
-      
-      navigate('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Gagal login. Periksa email & kata sandi.');
     } finally {

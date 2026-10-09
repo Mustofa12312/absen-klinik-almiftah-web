@@ -3,9 +3,10 @@ import { useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import Dashboard from './pages/Dashboard';
+import EmployeeDashboard from './pages/EmployeeDashboard';
 import Login from './pages/Login';
 
-function PrivateRoute({ children }: { children: React.ReactNode }) {
+function PrivateRoute({ children, requireAdmin = false }: { children: React.ReactNode, requireAdmin?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -21,9 +22,8 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
           setIsAdmin(true);
           setUser(currentUser);
         } else {
-          // If not admin, sign them out
-          await auth.signOut();
-          setUser(null);
+          // If not admin, they are an employee. Just let them stay logged in!
+          setUser(currentUser);
           setIsAdmin(false);
         }
       } else {
@@ -37,7 +37,10 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
   if (loading) return <div className="h-screen w-screen flex items-center justify-center">Loading...</div>;
   
-  return (user && isAdmin) ? children : <Navigate to="/login" />;
+  if (!user) return <Navigate to="/login" />;
+  if (requireAdmin && !isAdmin) return <Navigate to="/employee-dashboard" />;
+  
+  return children;
 }
 
 function App() {
@@ -45,8 +48,13 @@ function App() {
     <Router>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/dashboard/*" element={
+        <Route path="/employee-dashboard" element={
           <PrivateRoute>
+            <EmployeeDashboard />
+          </PrivateRoute>
+        } />
+        <Route path="/dashboard/*" element={
+          <PrivateRoute requireAdmin>
             <Dashboard />
           </PrivateRoute>
         } />
