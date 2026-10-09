@@ -69,6 +69,7 @@ export default function Employees() {
           const roleIndex = headers.findIndex(h => h.includes('role') || h === 'posisi');
           const branchIdIndex = headers.findIndex(h => h.includes('branch') || h.includes('cabang'));
           const strIndex = headers.findIndex(h => h.includes('str'));
+          const phoneIndex = headers.findIndex(h => h.includes('telepon') || h.includes('telp') || h.includes('phone'));
           
           if (nameIndex === -1 || roleIndex === -1 || branchIdIndex === -1) {
             alert('Format CSV tidak valid. Pastikan kolom Nama, Role/Posisi, dan Branch ID/Cabang ada. (Gunakan pemisah koma atau titik koma)');
@@ -94,7 +95,8 @@ export default function Employees() {
               branchId: matchingBranch ? matchingBranch.id! : branches[0]?.id || '',
               status: 'active',
               deviceBound: false,
-              strNumber: strIndex !== -1 ? row[strIndex] : undefined,
+              strNumber: strIndex !== -1 && row[strIndex] ? row[strIndex] : undefined,
+              phone: phoneIndex !== -1 && row[phoneIndex] ? row[phoneIndex] : undefined,
             };
 
             // If ID exists and isn't just empty or placeholder
@@ -131,7 +133,7 @@ export default function Employees() {
       alert('Tidak ada data untuk diexport');
       return;
     }
-    const headers = ['ID Pegawai', 'Nama', 'Posisi', 'Status', 'Cabang', 'No STR', 'Device Binding'];
+    const headers = ['ID Pegawai', 'Nama', 'Posisi', 'Status', 'Cabang', 'No STR', 'No Telepon', 'Device Binding'];
     const rows = employees.map(emp => [
       emp.id || '',
       emp.name,
@@ -139,6 +141,7 @@ export default function Employees() {
       emp.status,
       emp.branchId,
       emp.strNumber || '',
+      emp.phone || '',
       emp.deviceBound ? 'Terikat' : 'Belum Terikat'
     ]);
     
@@ -159,10 +162,10 @@ export default function Employees() {
   };
 
   const handleDownloadTemplate = () => {
-    const headers = ['ID Pegawai (Kosongkan jika baru)', 'Nama', 'Posisi', 'Cabang', 'No STR'];
+    const headers = ['ID Pegawai (Kosongkan jika baru)', 'Nama', 'Posisi', 'Cabang', 'No STR', 'No Telepon'];
     const sampleData = [
-      ['', 'Budi Santoso', 'Staff', branches[0]?.code || 'HQ-01', '12345678'],
-      ['', 'Siti Aminah', 'Dokter', branches[0]?.code || 'HQ-01', '87654321']
+      ['', 'Budi Santoso', 'Staff', branches[0]?.code || 'HQ-01', '12345678', '081234567890'],
+      ['', 'Siti Aminah', 'Dokter', branches[0]?.code || 'HQ-01', '87654321', '089876543210']
     ];
     const csvContent = [
       headers.join(','),
