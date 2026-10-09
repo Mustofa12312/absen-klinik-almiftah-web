@@ -78,18 +78,26 @@ export const AdminServices = {
     }
   },
 
-  async addEmployeesBulk(employeesData: Omit<Employee, 'id'>[]): Promise<void> {
+  async addEmployeesBulk(employeesData: Partial<Employee>[]): Promise<void> {
     try {
       const { writeBatch, collection, doc } = await import('firebase/firestore');
-      const batch = writeBatch(db);
       
       // Limit to 500 per batch as per Firestore limits
       for (let i = 0; i < employeesData.length; i += 500) {
         const chunk = employeesData.slice(i, i + 500);
         const currentBatch = writeBatch(db);
         chunk.forEach(emp => {
-          const empRef = doc(collection(db, 'employees'));
-          currentBatch.set(empRef, emp);
+          if (emp.id) {
+            // Update existing
+            const empRef = doc(db, 'employees', emp.id);
+            const dataToUpdate = { ...emp };
+            delete dataToUpdate.id; // don't write id field explicitly if not needed, though fine if we do
+            currentBatch.set(empRef, dataToUpdate, { merge: true });
+          } else {
+            // Create new
+            const empRef = doc(collection(db, 'employees'));
+            currentBatch.set(empRef, emp);
+          }
         });
         await currentBatch.commit();
       }

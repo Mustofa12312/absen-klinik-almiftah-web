@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Search, Smartphone, ShieldAlert, Edit2, MoreVertical, ShieldCheck, Upload, Download, X } from 'lucide-react';
+import { Plus, Search, Smartphone, ShieldAlert, Edit2, MoreVertical, ShieldCheck, Upload, Download, FileText, X } from 'lucide-react';
 import { AdminServices } from '../lib/services';
 import type { Employee, Branch } from '../lib/services';
 
@@ -59,13 +59,14 @@ export default function Employees() {
           
           // Parse header
           const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+          const idIndex = headers.findIndex(h => h === 'id' || h.includes('id pegawai') || h.includes('id ('));
           const nameIndex = headers.findIndex(h => h.includes('nama') || h === 'name');
           const roleIndex = headers.findIndex(h => h.includes('role') || h === 'posisi');
           const branchIdIndex = headers.findIndex(h => h.includes('branch') || h.includes('cabang'));
           const strIndex = headers.findIndex(h => h.includes('str'));
           
           if (nameIndex === -1 || roleIndex === -1 || branchIdIndex === -1) {
-            alert('Format CSV tidak valid. Pastikan kolom Nama, Role, dan Branch ID/Cabang ada.');
+            alert('Format CSV tidak valid. Pastikan kolom Nama, Role/Posisi, dan Branch ID/Cabang ada.');
             return;
           }
 
@@ -76,7 +77,7 @@ export default function Employees() {
             return rowText.split(re).map(v => v.replace(/^"|"$/g, '').trim());
           };
 
-          const newEmployees: Omit<Employee, 'id'>[] = [];
+          const newEmployees: Partial<Employee>[] = [];
           for (let i = 1; i < lines.length; i++) {
             const row = parseCSVRow(lines[i]);
             if (row.length === 0 || !row[nameIndex]) continue;
@@ -84,14 +85,21 @@ export default function Employees() {
             const branchIdValue = row[branchIdIndex] || branches[0]?.id || '';
             const matchingBranch = branches.find(b => b.id === branchIdValue || b.code === branchIdValue || b.name === branchIdValue);
             
-            newEmployees.push({
+            const empData: Partial<Employee> = {
               name: row[nameIndex] || 'Unnamed',
               role: row[roleIndex] || 'Staff',
               branchId: matchingBranch ? matchingBranch.id! : branches[0]?.id || '',
               status: 'active',
               deviceBound: false,
               strNumber: strIndex !== -1 ? row[strIndex] : undefined,
-            });
+            };
+
+            // If ID exists and isn't just empty or placeholder
+            if (idIndex !== -1 && row[idIndex] && row[idIndex].trim() !== '') {
+              empData.id = row[idIndex].trim();
+            }
+
+            newEmployees.push(empData);
           }
           
           if (newEmployees.length === 0) {
@@ -120,8 +128,9 @@ export default function Employees() {
       alert('Tidak ada data untuk diexport');
       return;
     }
-    const headers = ['Nama', 'Posisi', 'Status', 'Cabang', 'No STR', 'Device Binding'];
+    const headers = ['ID Pegawai', 'Nama', 'Posisi', 'Status', 'Cabang', 'No STR', 'Device Binding'];
     const rows = employees.map(emp => [
+      emp.id || '',
       emp.name,
       emp.role,
       emp.status,
@@ -145,6 +154,29 @@ export default function Employees() {
     link.click();
     document.body.removeChild(link);
   };
+
+  const handleDownloadTemplate = () => {
+    const headers = ['ID Pegawai (Kosongkan jika baru)', 'Nama', 'Posisi', 'Cabang', 'No STR'];
+    const sampleData = [
+      ['', 'Budi Santoso', 'Staff', branches[0]?.code || 'HQ-01', '12345678'],
+      ['', 'Siti Aminah', 'Dokter', branches[0]?.code || 'HQ-01', '87654321']
+    ];
+    const csvContent = [
+      headers.join(','),
+      ...sampleData.map(row => row.map(val => `"${val}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'template_import_pegawai.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
 
   const handleAddEmployee = () => {
     setIsAddModalOpen(true);
@@ -201,6 +233,13 @@ export default function Employees() {
             ref={fileInputRef} 
             onChange={handleImportCSV} 
           />
+          <button 
+            onClick={handleDownloadTemplate}
+            className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Template CSV
+          </button>
           <button 
             onClick={handleExportCSV}
             className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
