@@ -8,10 +8,28 @@ import Login from './pages/Login';
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        const { doc, getDoc, getFirestore } = await import('firebase/firestore');
+        const db = getFirestore();
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        
+        if (userDoc.exists() && userDoc.data()?.role === 'super_admin') {
+          setIsAdmin(true);
+          setUser(currentUser);
+        } else {
+          // If not admin, sign them out
+          await auth.signOut();
+          setUser(null);
+          setIsAdmin(false);
+        }
+      } else {
+        setUser(null);
+        setIsAdmin(false);
+      }
       setLoading(false);
     });
     return () => unsubscribe();
@@ -19,7 +37,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
   if (loading) return <div className="h-screen w-screen flex items-center justify-center">Loading...</div>;
   
-  return user ? children : <Navigate to="/login" />;
+  return (user && isAdmin) ? children : <Navigate to="/login" />;
 }
 
 function App() {

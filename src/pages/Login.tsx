@@ -17,7 +17,19 @@ export default function Login() {
     setLoading(true);
     setError(null);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const uid = userCredential.user.uid;
+      
+      // Check if user is super_admin
+      const { doc, getDoc, getFirestore } = await import('firebase/firestore');
+      const db = getFirestore();
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      
+      if (!userDoc.exists() || userDoc.data()?.role !== 'super_admin') {
+        await auth.signOut();
+        throw new Error("Akses Ditolak: Anda mencoba login dengan akun Pegawai ke Portal Admin. Silakan gunakan Aplikasi Android khusus Pegawai.");
+      }
+      
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Gagal login. Periksa email & kata sandi.');
