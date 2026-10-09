@@ -95,9 +95,14 @@ export default function Employees() {
               branchId: matchingBranch ? matchingBranch.id! : branches[0]?.id || '',
               status: 'active',
               deviceBound: false,
-              strNumber: strIndex !== -1 && row[strIndex] ? row[strIndex] : undefined,
-              phone: phoneIndex !== -1 && row[phoneIndex] ? row[phoneIndex] : undefined,
             };
+            
+            if (strIndex !== -1 && row[strIndex]) {
+              empData.strNumber = row[strIndex];
+            }
+            if (phoneIndex !== -1 && row[phoneIndex]) {
+              empData.phone = row[phoneIndex];
+            }
 
             // If ID exists and isn't just empty or placeholder
             if (idIndex !== -1 && row[idIndex] && row[idIndex].trim() !== '') {
@@ -216,8 +221,8 @@ export default function Employees() {
           branchId: employeeForm.branchId,
           status: 'active',
           deviceBound: false,
-          strNumber: employeeForm.strNumber || undefined,
-          phone: employeeForm.phone || undefined,
+          strNumber: employeeForm.strNumber || "",
+          phone: employeeForm.phone || "",
         });
       }
       setIsModalOpen(false);
