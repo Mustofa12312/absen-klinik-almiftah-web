@@ -22,6 +22,12 @@ export default function Requests() {
   const fetchRequests = async () => {
     setLoading(true);
     try {
+      const empSnap = await getDocs(collection(db, 'employees'));
+      const empMap: Record<string, string> = {};
+      empSnap.docs.forEach(doc => {
+        empMap[doc.id] = doc.data().name || 'Unknown';
+      });
+
       const leaveSnap = await getDocs(collection(db, 'leave_requests'));
       const corrSnap = await getDocs(collection(db, 'correction_requests'));
       
@@ -31,11 +37,11 @@ export default function Requests() {
         const d = doc.data();
         all.push({
           id: doc.id,
-          employeeName: d.employeeName || 'Unknown',
+          employeeName: d.employeeName || empMap[d.employeeId] || 'Unknown',
           type: d.type || 'Izin',
           date: d.date || d.startDate || '-',
           reason: d.reason || '-',
-          status: d.status || 'PENDING'
+          status: (d.status || 'PENDING').toUpperCase() as any
         });
       });
       
@@ -43,13 +49,16 @@ export default function Requests() {
         const d = doc.data();
         all.push({
           id: doc.id,
-          employeeName: d.employeeName || 'Unknown',
+          employeeName: d.employeeName || empMap[d.employeeId] || 'Unknown',
           type: 'Koreksi',
           date: d.date || '-',
           reason: d.reason || '-',
-          status: d.status || 'PENDING'
+          status: (d.status || 'PENDING').toUpperCase() as any
         });
       });
+
+      // Sort by date descending
+      all.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       setRequests(all);
     } catch (e) {

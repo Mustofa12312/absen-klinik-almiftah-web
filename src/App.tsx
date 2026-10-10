@@ -13,24 +13,31 @@ function PrivateRoute({ children, requireAdmin = false }: { children: React.Reac
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        const { doc, getDoc, getFirestore } = await import('firebase/firestore');
-        const db = getFirestore();
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        
-        if (userDoc.exists() && userDoc.data()?.role === 'super_admin') {
-          setIsAdmin(true);
-          setUser(currentUser);
+      try {
+        if (currentUser) {
+          const { doc, getDoc } = await import('firebase/firestore');
+          const { db } = await import('./lib/firebase');
+          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          
+          if (userDoc.exists() && userDoc.data()?.role === 'super_admin') {
+            setIsAdmin(true);
+            setUser(currentUser);
+          } else {
+            // If not admin, they are an employee. Just let them stay logged in!
+            setUser(currentUser);
+            setIsAdmin(false);
+          }
         } else {
-          // If not admin, they are an employee. Just let them stay logged in!
-          setUser(currentUser);
+          setUser(null);
           setIsAdmin(false);
         }
-      } else {
+      } catch (error) {
+        console.error("Auth state error:", error);
         setUser(null);
         setIsAdmin(false);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
