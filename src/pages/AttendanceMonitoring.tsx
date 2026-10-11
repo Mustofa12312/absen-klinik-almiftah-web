@@ -34,9 +34,10 @@ export default function AttendanceMonitoring() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   
-  const today = new Date();
-  const defaultDate = `${today.getFullYear()}-${(today.getMonth()+1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
-  const [filterDate, setFilterDate] = useState(defaultDate);
+  const [filterDate, setFilterDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${(today.getMonth()+1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+  });
 
   useEffect(() => {
     const fetchData = async () => {

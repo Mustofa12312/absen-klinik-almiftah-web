@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -212,6 +212,8 @@ function Overview() {
   const [branches, setBranches] = useState<{ id: string; name: string; code: string }[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
   
+  const todayLabel = useMemo(() => new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), []);
+
   useEffect(() => {
     // Fetch branches for filter dropdown
     getDocs(collection(db, 'branches')).then(snap => {
@@ -387,7 +389,7 @@ function Overview() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Ringkasan Hari Ini</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} — {selectedBranch ? (branches.find(b => b.id === selectedBranch)?.name ?? 'Cabang Terpilih') : 'Semua Cabang'}
+            {todayLabel} — {selectedBranch ? (branches.find(b => b.id === selectedBranch)?.name ?? 'Cabang Terpilih') : 'Semua Cabang'}
           </p>
         </div>
         <select

@@ -85,7 +85,7 @@ export default function Requests() {
     try {
       await AdminServices.updateRequestStatus(id, status, type);
       fetchRequests();
-    } catch (e) {
+    } catch {
       alert('Gagal update status');
     }
   };

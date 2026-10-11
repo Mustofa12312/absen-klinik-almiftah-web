@@ -20,23 +20,6 @@ export default function Employees() {
   const [duplicateCount, setDuplicateCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetchEmployees();
-    fetchBranches();
-  }, []);
-
-  const fetchBranches = async () => {
-    try {
-      const b = await AdminServices.getBranches();
-      setBranches(b);
-      if (b.length > 0) {
-        setEmployeeForm(prev => ({ ...prev, branchId: b[0].id || '' }));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   const fetchEmployees = async () => {
     setLoading(true);
     try {
@@ -55,12 +38,30 @@ export default function Employees() {
         return key !== '|' && authIds.has(key);
       });
       setDuplicateCount(legacyDups.length);
-    } catch (e) {
-      console.error(e);
+    } catch (_e) {
+      console.error(_e);
     } finally {
       setLoading(false);
     }
   };
+
+  const fetchBranches = async () => {
+    try {
+      const b = await AdminServices.getBranches();
+      setBranches(b);
+      if (b.length > 0) {
+        setEmployeeForm(prev => ({ ...prev, branchId: b[0].id || '' }));
+      }
+    } catch (_e) {
+      console.error(_e);
+    }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    fetchEmployees();
+    fetchBranches();
+  }, []);
 
   const handleImportCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -246,7 +247,7 @@ export default function Employees() {
       setIsModalOpen(false);
       setEmployeeForm({ name: '', role: 'Staff', branchId: branches[0]?.id || '', strNumber: '', phone: '' });
       fetchEmployees();
-    } catch (err) {
+    } catch {
       alert('Gagal menyimpan pegawai');
     } finally {
       setIsSubmitting(false);
@@ -258,7 +259,7 @@ export default function Employees() {
       try {
         await AdminServices.resetDeviceBinding(id);
         fetchEmployees();
-      } catch (e) {
+      } catch {
         alert('Gagal mereset perangkat');
       }
     }
@@ -272,7 +273,7 @@ export default function Employees() {
       const result = await AdminServices.generateAuthAccounts();
       alert(`Berhasil: ${result.success} akun dibuat.\nGagal: ${result.failed} akun.`);
       fetchEmployees();
-    } catch (e) {
+    } catch {
       alert('Terjadi kesalahan saat membuat akun');
     } finally {
       setIsGeneratingAuth(false);
@@ -286,7 +287,7 @@ export default function Employees() {
       const result = await AdminServices.cleanupDuplicateEmployees();
       alert(`Selesai!\nDihapus: ${result.deleted}\nDitandai migrated: ${result.marked}\nGagal: ${result.errors}`);
       fetchEmployees();
-    } catch (e) {
+    } catch {
       alert('Gagal membersihkan duplikat');
     } finally {
       setIsCleaningUp(false);
