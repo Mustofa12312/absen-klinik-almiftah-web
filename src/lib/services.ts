@@ -37,6 +37,72 @@ export interface Shift {
   crossesMidnight: boolean;
 }
 
+export interface DuplicateGroup {
+  master: Employee & { migrated?: boolean };
+  duplicates: (Employee & { migrated?: boolean })[];
+}
+
+export function detectDuplicateEmployees(allDocs: (Employee & { migrated?: boolean })[]): DuplicateGroup[] {
+  const activeDocs = allDocs.filter(d => !d.migrated && d.id);
+  const groups: DuplicateGroup[] = [];
+  const assigned = new Set<string>();
+
+  const cleanStr = (s?: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const cleanPhone = (s?: string) => (s || '').replace(/[^0-9]/g, '');
+
+  for (let i = 0; i < activeDocs.length; i++) {
+    const docA = activeDocs[i];
+    if (assigned.has(docA.id!)) continue;
+
+    const groupMembers: (Employee & { migrated?: boolean })[] = [docA];
+    assigned.add(docA.id!);
+
+    const nameA = cleanStr(docA.name);
+    const phoneA = cleanPhone(docA.phone);
+    const strA = cleanStr(docA.strNumber);
+
+    for (let j = i + 1; j < activeDocs.length; j++) {
+      const docB = activeDocs[j];
+      if (assigned.has(docB.id!)) continue;
+
+      const nameB = cleanStr(docB.name);
+      const phoneB = cleanPhone(docB.phone);
+      const strB = cleanStr(docB.strNumber);
+
+      const matchName = nameA.length >= 3 && nameA === nameB;
+      const matchPhone = phoneA.length >= 6 && phoneA === phoneB;
+      const matchStr = strA.length >= 4 && strA === strB;
+
+      if (matchName || matchPhone || matchStr) {
+        groupMembers.push(docB);
+        assigned.add(docB.id!);
+      }
+    }
+
+    if (groupMembers.length > 1) {
+      // Skor untuk memilih dokumen terbaik yang dipertahankan (master)
+      const score = (doc: Employee) => {
+        let pts = 0;
+        if (doc.id && doc.id.length >= 28) pts += 100; // Auth UID
+        if (doc.deviceBound) pts += 50;
+        if (doc.phone && doc.phone.trim() !== '') pts += 20;
+        if (doc.strNumber && doc.strNumber.trim() !== '') pts += 20;
+        if (doc.status === 'active') pts += 10;
+        return pts;
+      };
+
+      groupMembers.sort((a, b) => score(b) - score(a));
+
+      groups.push({
+        master: groupMembers[0],
+        duplicates: groupMembers.slice(1)
+      });
+    }
+  }
+
+  return groups;
+}
+
 export const AdminServices = {
   // --- BRANCHES ---
   async getBranches(): Promise<Branch[]> {
@@ -208,6 +274,23 @@ export const AdminServices = {
   },
 
   // --- EMPLOYEES ---
+  async deleteEmployee(employeeId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'employees', employeeId));
+    } catch (error) {
+      console.warn("deleteDoc gagal, mencoba soft-delete:", error);
+      try {
+        await updateDoc(doc(db, 'employees', employeeId), { 
+          migrated: true, 
+          status: 'inactive' 
+        });
+      } catch (innerError) {
+        console.error("Gagal menghapus pegawai:", innerError);
+        throw error;
+      }
+    }
+  },
+
   async getEmployeesByBranch(branchId?: string): Promise<Employee[]> {
     try {
       let q = collection(db, 'employees');
@@ -218,62 +301,31 @@ export const AdminServices = {
       const querySnapshot = await getDocs(q);
       const allDocs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee & { migrated?: boolean }));
 
-      // 1. Buang dokumen yang sudah di-mark migrated
-      const nonMigrated = allDocs.filter(e => !(e as any).migrated);
-
-      // 2. Deduplikasi: pisahkan dokumen Auth-UID (≥28 chars) dan dokumen Firestore auto-ID (≤20 chars)
-      const authDocs   = nonMigrated.filter(e => e.id!.length >= 28);
-      const legacyDocs = nonMigrated.filter(e => e.id!.length < 28);
-
-      // Buat set identitas unik dari auth docs (STR + phone)
-      const authKeys = new Set<string>();
-      authDocs.forEach(e => {
-        const key = `${(e as any).strNumber || ''}|${(e as any).phone || ''}`;
-        if (key !== '|') authKeys.add(key);
-      });
-
-      // Hanya sertakan legacy docs yang TIDAK punya padanan di auth docs
-      const uniqueLegacy = legacyDocs.filter(e => {
-        const key = `${(e as any).strNumber || ''}|${(e as any).phone || ''}`;
-        return key === '|' || !authKeys.has(key);
-      });
-
-      return [...authDocs, ...uniqueLegacy];
+      return allDocs.filter(e => !(e as any).migrated);
     } catch (error) {
       console.error("Gagal mengambil data pegawai:", error);
       throw error;
     }
   },
 
-  // Hapus dokumen pegawai lama (legacy auto-ID) yang sudah punya padanan auth-UID
+  // Hapus semua dokumen duplikat dari Firestore
   async cleanupDuplicateEmployees(): Promise<{ deleted: number; marked: number; errors: number }> {
     const querySnapshot = await getDocs(collection(db, 'employees'));
-    const allDocs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+    const allDocs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Employee & { migrated?: boolean }));
 
-    const nonMigrated = allDocs.filter((e: any) => !e.migrated);
-    const authDocs    = nonMigrated.filter((e: any) => e.id.length >= 28);
-    const legacyDocs  = nonMigrated.filter((e: any) => e.id.length < 28);
-
-    // Buat set identitas unik dari auth docs
-    const authKeys = new Set<string>();
-    authDocs.forEach((e: any) => {
-      const key = `${e.strNumber || ''}|${e.phone || ''}`;
-      if (key !== '|') authKeys.add(key);
-    });
+    const groups = detectDuplicateEmployees(allDocs);
+    const duplicatesToDelete = groups.flatMap(g => g.duplicates);
 
     let deleted = 0, marked = 0, errors = 0;
 
-    for (const legacy of legacyDocs) {
-      const key = `${legacy.strNumber || ''}|${legacy.phone || ''}`;
-      const isDuplicate = key !== '|' && authKeys.has(key);
-      if (!isDuplicate) continue;
-
+    for (const dup of duplicatesToDelete) {
+      if (!dup.id) continue;
       try {
-        await deleteDoc(doc(db, 'employees', legacy.id));
+        await deleteDoc(doc(db, 'employees', dup.id));
         deleted++;
       } catch {
         try {
-          await updateDoc(doc(db, 'employees', legacy.id), { migrated: true });
+          await updateDoc(doc(db, 'employees', dup.id), { migrated: true, status: 'inactive' });
           marked++;
         } catch {
           errors++;

@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Search, Smartphone, ShieldAlert, Edit2, MoreVertical, ShieldCheck, Upload, Download, FileText, X } from 'lucide-react';
-import { getDocs, collection } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { AdminServices } from '../lib/services';
+import { Plus, Search, Smartphone, ShieldAlert, Edit2, Trash2, ShieldCheck, Upload, Download, FileText, X } from 'lucide-react';
+import { AdminServices, detectDuplicateEmployees } from '../lib/services';
 import type { Employee, Branch } from '../lib/services';
 
 export default function Employees() {
@@ -18,26 +16,25 @@ export default function Employees() {
   const [isGeneratingAuth, setIsGeneratingAuth] = useState(false);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [duplicateCount, setDuplicateCount] = useState(0);
+  const [duplicateDocIds, setDuplicateDocIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      // Ambil data bersih (sudah di-dedup)
       const data = await AdminServices.getEmployeesByBranch();
       setEmployees(data);
 
-      // Hitung duplikat dari raw Firestore (sebelum dedup)
-      const rawSnap = await getDocs(collection(db, 'employees'));
-      const rawDocs = rawSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-      const nonMigrated = rawDocs.filter((e: any) => !e.migrated);
-      const authIds = new Set(nonMigrated.filter((e: any) => e.id.length >= 28).map((e: any) => `${e.strNumber || ''}|${e.phone || ''}`))
-      const legacyDups = nonMigrated.filter((e: any) => {
-        if (e.id.length >= 28) return false;
-        const key = `${e.strNumber || ''}|${e.phone || ''}`;
-        return key !== '|' && authIds.has(key);
+      // Deteksi semua data duplikat (berdasarkan nama, STR, atau telepon yang sama)
+      const dupGroups = detectDuplicateEmployees(data);
+      const dupIds = new Set<string>();
+      dupGroups.forEach(g => {
+        g.duplicates.forEach(d => {
+          if (d.id) dupIds.add(d.id);
+        });
       });
-      setDuplicateCount(legacyDups.length);
+      setDuplicateDocIds(dupIds);
+      setDuplicateCount(dupIds.size);
     } catch (_e) {
       console.error(_e);
     } finally {
@@ -280,15 +277,33 @@ export default function Employees() {
     }
   };
 
+  const handleDeleteEmployee = async (emp: Employee) => {
+    if (!emp.id) return;
+    const confirmMsg = `Hapus pegawai "${emp.name}"?\nID: ${emp.id}\nPosisi: ${emp.role}\n\nData yang dihapus tidak dapat dipulihkan. Lanjutkan?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsSubmitting(true);
+    try {
+      await AdminServices.deleteEmployee(emp.id);
+      if (isModalOpen) setIsModalOpen(false);
+      alert(`Pegawai "${emp.name}" berhasil dihapus.`);
+      await fetchEmployees();
+    } catch {
+      alert('Gagal menghapus pegawai. Pastikan Anda memiliki hak akses admin.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleCleanupDuplicates = async () => {
-    if (!window.confirm(`Hapus ${duplicateCount} dokumen pegawai lama (duplikat) dari Firestore? Data pegawai baru yang sudah memiliki akun Auth tetap aman.`)) return;
+    if (!window.confirm(`Ditemukan ${duplicateCount} data duplikat.\n\nSistem akan mempertahankan data utama (akun login/data terlengkap) dan menghapus ${duplicateCount} salinan data duplikat lainnya.\n\nLanjutkan pembersihan?`)) return;
     setIsCleaningUp(true);
     try {
       const result = await AdminServices.cleanupDuplicateEmployees();
-      alert(`Selesai!\nDihapus: ${result.deleted}\nDitandai migrated: ${result.marked}\nGagal: ${result.errors}`);
-      fetchEmployees();
+      alert(`Pembersihan Duplikat Selesai!\n\nBerhasil Dihapus: ${result.deleted}\nDinonaktifkan: ${result.marked}\nGagal: ${result.errors}`);
+      await fetchEmployees();
     } catch {
-      alert('Gagal membersihkan duplikat');
+      alert('Gagal membersihkan data duplikat');
     } finally {
       setIsCleaningUp(false);
     }
@@ -357,7 +372,7 @@ export default function Employees() {
               disabled={isSubmitting || isGeneratingAuth || isCleaningUp}
               className="inline-flex items-center justify-center px-2 sm:px-4 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-lg shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none transition-colors disabled:opacity-50 col-span-2 sm:col-span-1"
             >
-              <X className="w-4 h-4 mr-2" />
+              <Trash2 className="w-4 h-4 mr-2" />
               {isCleaningUp ? 'Membersihkan...' : `Hapus ${duplicateCount} Duplikat`}
             </button>
           )}
@@ -417,16 +432,25 @@ export default function Employees() {
                 <tr><td colSpan={5} className="px-6 py-4 text-center">Loading...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={5} className="px-6 py-4 text-center text-gray-500">Belum ada data pegawai</td></tr>
-              ) : filtered.map((emp) => (
-                <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
+              ) : filtered.map((emp) => {
+                const isDup = emp.id && duplicateDocIds.has(emp.id);
+                return (
+                <tr key={emp.id} className={`hover:bg-gray-50 transition-colors ${isDup ? 'bg-amber-50/50' : ''}`}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                      <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
                          <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=random`} alt="" />
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{emp.name}</div>
-                        <div className="text-sm text-gray-500">ID: {(emp.id ?? '').padStart(4, '0')}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900">{emp.name}</span>
+                          {isDup && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                              Duplikat
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-500 font-mono text-xs">ID: {emp.id}</div>
                       </div>
                     </div>
                   </td>
@@ -457,22 +481,23 @@ export default function Employees() {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex justify-end items-center space-x-3">
+                    <div className="flex justify-end items-center space-x-2">
                       {emp.deviceBound && (
-                         <button onClick={() => handleResetDevice(emp.id!)} className="text-gray-400 hover:text-orange-600 transition-colors" title="Reset Device">
+                         <button onClick={() => handleResetDevice(emp.id!)} className="p-1.5 text-gray-400 hover:text-orange-600 transition-colors rounded-lg hover:bg-orange-50" title="Reset Perangkat">
                            <Smartphone className="h-4 w-4" />
                          </button>
                       )}
-                      <button onClick={() => handleEditEmployee(emp)} className="text-gray-400 hover:text-primary transition-colors" title="Edit">
+                      <button onClick={() => handleEditEmployee(emp)} className="p-1.5 text-gray-400 hover:text-primary transition-colors rounded-lg hover:bg-gray-100" title="Edit Pegawai">
                         <Edit2 className="h-4 w-4" />
                       </button>
-                      <button className="text-gray-400 hover:text-gray-600 transition-colors">
-                        <MoreVertical className="h-4 w-4" />
+                      <button onClick={() => handleDeleteEmployee(emp)} className="p-1.5 text-gray-400 hover:text-red-600 transition-colors rounded-lg hover:bg-red-50" title="Hapus Pegawai">
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -550,22 +575,38 @@ export default function Employees() {
                 </select>
               </div>
               
-              <div className="pt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none transition-colors disabled:opacity-50"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !employeeForm.name || !employeeForm.branchId}
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                >
-                  {isSubmitting ? 'Menyimpan...' : (editingId ? 'Simpan Perubahan' : 'Simpan Pegawai')}
-                </button>
+              <div className="pt-4 flex items-center justify-between gap-2 border-t border-gray-100">
+                {editingId ? (
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => {
+                      const emp = employees.find(e => e.id === editingId);
+                      if (emp) handleDeleteEmployee(emp);
+                    }}
+                    className="inline-flex items-center px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1.5" />
+                    Hapus Pegawai
+                  </button>
+                ) : <div />}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none transition-colors disabled:opacity-50"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !employeeForm.name || !employeeForm.branchId}
+                    className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                  >
+                    {isSubmitting ? 'Menyimpan...' : (editingId ? 'Simpan Perubahan' : 'Simpan Pegawai')}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
