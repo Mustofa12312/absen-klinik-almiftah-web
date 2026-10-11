@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { LogIn, Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../lib/firebase';
+import { formatErrorMessage } from '../lib/errorUtils';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -31,7 +32,7 @@ export default function Login() {
         navigate('/dashboard');
       }
     } catch (err: any) {
-      setError(err.message || 'Gagal login. Periksa email & kata sandi.');
+      setError(formatErrorMessage(err));
     } finally {
       setLoading(false);
     }

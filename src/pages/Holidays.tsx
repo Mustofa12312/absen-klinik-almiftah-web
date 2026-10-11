@@ -3,6 +3,7 @@ import { Plus, Search, MoreVertical, Edit2, Calendar, Ban, X } from 'lucide-reac
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { HolidayServices } from '../lib/services';
+import { formatErrorMessage } from '../lib/errorUtils';
 
 interface Holiday {
   id: string;
@@ -55,7 +56,7 @@ export default function Holidays() {
       await HolidayServices.updateHoliday(h.id, { isActive: !h.isActive });
       fetchHolidays();
     } catch (e) {
-      alert('Gagal mengubah status hari libur.');
+      alert('Gagal mengubah status hari libur: ' + formatErrorMessage(e));
     }
   };
 
@@ -69,7 +70,7 @@ export default function Holidays() {
       setNewHoliday({ date: '', name: '', description: '', scope: 'all_branches' });
       fetchHolidays();
     } catch (err) {
-      alert('Gagal menambah hari libur');
+      alert('Gagal menambah hari libur: ' + formatErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }

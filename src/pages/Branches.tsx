@@ -3,6 +3,7 @@ import { Plus, Search, MapPin, MoreVertical, Edit2, Ban, X } from 'lucide-react'
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { AdminServices } from '../lib/services';
+import { formatErrorMessage } from '../lib/errorUtils';
 
 interface Branch {
   id: string;
@@ -86,7 +87,7 @@ export default function Branches() {
       setBranchForm({ name: '', code: '', address: '', radius: 50 });
       fetchBranches();
     } catch (err) {
-      alert('Gagal menyimpan cabang');
+      alert('Gagal menyimpan data cabang: ' + formatErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }

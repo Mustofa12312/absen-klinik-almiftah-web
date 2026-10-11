@@ -3,6 +3,7 @@ import { Search, CheckCircle, XCircle, Clock, FileText } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { AdminServices } from '../lib/services';
+import { formatErrorMessage } from '../lib/errorUtils';
 
 interface Request {
   id: string;
@@ -85,8 +86,8 @@ export default function Requests() {
     try {
       await AdminServices.updateRequestStatus(id, status, type);
       fetchRequests();
-    } catch {
-      alert('Gagal update status');
+    } catch (e) {
+      alert('Gagal memperbarui status pengajuan: ' + formatErrorMessage(e));
     }
   };
 
@@ -147,7 +148,7 @@ export default function Requests() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
-                <tr><td colSpan={4} className="px-6 py-4 text-center">Loading...</td></tr>
+                <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">Memuat data pengajuan...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={4} className="px-6 py-4 text-center text-gray-500">Belum ada pengajuan</td></tr>
               ) : filtered.map((req) => (

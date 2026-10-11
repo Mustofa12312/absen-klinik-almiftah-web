@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Plus, Search, Smartphone, ShieldAlert, Edit2, Trash2, ShieldCheck, Upload, Download, FileText, X } from 'lucide-react';
 import { AdminServices, detectDuplicateEmployees } from '../lib/services';
 import type { Employee, Branch } from '../lib/services';
+import { formatErrorMessage } from '../lib/errorUtils';
 
 export default function Employees() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -244,8 +245,8 @@ export default function Employees() {
       setIsModalOpen(false);
       setEmployeeForm({ name: '', role: 'Staff', branchId: branches[0]?.id || '', strNumber: '', phone: '' });
       fetchEmployees();
-    } catch {
-      alert('Gagal menyimpan pegawai');
+    } catch (err) {
+      alert('Gagal menyimpan data pegawai: ' + formatErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -256,8 +257,8 @@ export default function Employees() {
       try {
         await AdminServices.resetDeviceBinding(id);
         fetchEmployees();
-      } catch {
-        alert('Gagal mereset perangkat');
+      } catch (err) {
+        alert('Gagal mereset perangkat: ' + formatErrorMessage(err));
       }
     }
   };
@@ -270,8 +271,8 @@ export default function Employees() {
       const result = await AdminServices.generateAuthAccounts();
       alert(`Berhasil: ${result.success} akun dibuat.\nGagal: ${result.failed} akun.`);
       fetchEmployees();
-    } catch {
-      alert('Terjadi kesalahan saat membuat akun');
+    } catch (err) {
+      alert('Terjadi kesalahan saat membuat akun: ' + formatErrorMessage(err));
     } finally {
       setIsGeneratingAuth(false);
     }
@@ -288,8 +289,8 @@ export default function Employees() {
       if (isModalOpen) setIsModalOpen(false);
       alert(`Pegawai "${emp.name}" berhasil dihapus.`);
       await fetchEmployees();
-    } catch {
-      alert('Gagal menghapus pegawai. Pastikan Anda memiliki hak akses admin.');
+    } catch (err) {
+      alert('Gagal menghapus pegawai: ' + formatErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -302,8 +303,8 @@ export default function Employees() {
       const result = await AdminServices.cleanupDuplicateEmployees();
       alert(`Pembersihan Duplikat Selesai!\n\nBerhasil Dihapus: ${result.deleted}\nDinonaktifkan: ${result.marked}\nGagal: ${result.errors}`);
       await fetchEmployees();
-    } catch {
-      alert('Gagal membersihkan data duplikat');
+    } catch (err) {
+      alert('Gagal membersihkan data duplikat: ' + formatErrorMessage(err));
     } finally {
       setIsCleaningUp(false);
     }
@@ -429,7 +430,7 @@ export default function Employees() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
-                <tr><td colSpan={5} className="px-6 py-4 text-center">Loading...</td></tr>
+                <tr><td colSpan={5} className="px-6 py-4 text-center text-gray-500">Memuat data pegawai...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={5} className="px-6 py-4 text-center text-gray-500">Belum ada data pegawai</td></tr>
               ) : filtered.map((emp) => {

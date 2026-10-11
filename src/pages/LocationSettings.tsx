@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { MapPin, Search, Edit2, Plus, MoreVertical, X, Crosshair, ClipboardPaste, ExternalLink } from 'lucide-react';
 import { AdminServices } from '../lib/services';
 import type { Branch } from '../lib/services';
+import { formatErrorMessage } from '../lib/errorUtils';
 
 export default function LocationSettings() {
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -60,7 +61,7 @@ export default function LocationSettings() {
       setEditingBranch(null);
     } catch (err: any) {
       console.error(err);
-      alert('Gagal menyimpan lokasi: ' + (err.message || 'Kesalahan tidak diketahui'));
+      alert('Gagal menyimpan lokasi: ' + formatErrorMessage(err));
     } finally {
       setIsSaving(false);
     }
@@ -82,7 +83,7 @@ export default function LocationSettings() {
           }
         },
         (error) => {
-          alert('Gagal mengambil lokasi: ' + error.message);
+          alert('Gagal mendeteksi lokasi GPS: ' + formatErrorMessage(error));
         }
       );
     } else {
@@ -127,7 +128,7 @@ export default function LocationSettings() {
       fetchBranches();
     } catch (err: any) {
       console.error(err);
-      alert('Gagal menambah lokasi: ' + (err.message || 'Kesalahan tidak diketahui'));
+      alert('Gagal menambah lokasi: ' + formatErrorMessage(err));
     } finally {
       setIsSaving(false);
     }

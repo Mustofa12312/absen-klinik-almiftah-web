@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Smartphone, Search, RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { formatErrorMessage } from '../lib/errorUtils';
 
 interface Device {
   id: string;
@@ -77,7 +78,7 @@ export default function DeviceManagement() {
         setDevices(prev => prev.map(d => d.id === id ? { ...d, isActive: false } : d));
       } catch (e) {
         console.error('Failed to reset device', e);
-        alert('Gagal mereset perangkat');
+        alert('Gagal mereset perangkat: ' + formatErrorMessage(e));
       }
     }
   };

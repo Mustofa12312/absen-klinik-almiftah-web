@@ -42,7 +42,14 @@ function PrivateRoute({ children, requireAdmin = false }: { children: React.Reac
     return () => unsubscribe();
   }, []);
 
-  if (loading) return <div className="h-screen w-screen flex items-center justify-center">Loading...</div>;
+  if (loading) return (
+    <div className="h-screen w-screen flex items-center justify-center bg-gray-50 text-gray-600 font-medium text-sm">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <span>Memuat aplikasi...</span>
+      </div>
+    </div>
+  );
   
   if (!user) return <Navigate to="/login" />;
   if (requireAdmin && !isAdmin) return <Navigate to="/employee-dashboard" />;

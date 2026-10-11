@@ -4,6 +4,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { AdminServices } from '../lib/services';
 import type { Shift } from '../lib/services';
+import { formatErrorMessage } from '../lib/errorUtils';
 
 export default function Shifts() {
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -67,7 +68,7 @@ export default function Shifts() {
       setNewShift({ name: '', startTime: '', endTime: '', tolerance: 15, crossesMidnight: false });
       fetchShifts();
     } catch (err: any) {
-      alert('Gagal menyimpan shift: ' + (err.message || ''));
+      alert('Gagal menyimpan shift: ' + formatErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -189,7 +190,7 @@ export default function Shifts() {
           fetchShifts();
         } catch (error: any) {
           console.error(error);
-          alert('Gagal mengimpor shift: ' + (error.message || ''));
+          alert('Gagal mengimpor shift: ' + formatErrorMessage(error));
         } finally {
           setLoading(false);
         }

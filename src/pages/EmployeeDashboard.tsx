@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
-import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { LogOut, User, Calendar, Clock, Fingerprint, CheckCircle2, FileText, X, MapPin } from 'lucide-react';
 import { signOut } from 'firebase/auth';
+import { formatErrorMessage } from '../lib/errorUtils';
 
 export default function EmployeeDashboard() {
   const [profile, setProfile] = useState<any>(null);
@@ -30,10 +31,28 @@ export default function EmployeeDashboard() {
         const user = auth.currentUser;
         if (!user) return;
 
+        // Coba ambil dari dokumen employees/{uid}
+        let empData: any = null;
         const empDoc = await getDoc(doc(db, 'employees', user.uid));
         if (empDoc.exists()) {
-          setProfile(empDoc.data());
+          empData = empDoc.data();
+        } else {
+          // Fallback cari employee dengan userId == user.uid atau email
+          const empQuery = query(collection(db, 'employees'), where('userId', '==', user.uid));
+          const empSnap = await getDocs(empQuery);
+          if (!empSnap.empty) {
+            empData = empSnap.docs[0].data();
+          } else {
+            // Default profil dari auth jika tidak ditemukan dokumen khusus
+            empData = {
+              name: user.displayName || user.email?.split('@')[0] || 'Pegawai',
+              role: 'Pegawai',
+              phone: user.phoneNumber || user.email || '-',
+              branchId: 'HQ-01'
+            };
+          }
         }
+        setProfile(empData);
 
         const q = query(
           collection(db, 'attendance'),
@@ -41,15 +60,21 @@ export default function EmployeeDashboard() {
         );
         const snap = await getDocs(q);
         const att = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-        att.sort((a, b) => b.checkInTime.localeCompare(a.checkInTime));
+
+        // Urutkan dari yang terbaru
+        att.sort((a, b) => {
+          const timeA = a.checkInTime || (a.createdAt?.toDate ? a.createdAt.toDate().toISOString() : a.date || '');
+          const timeB = b.checkInTime || (b.createdAt?.toDate ? b.createdAt.toDate().toISOString() : b.date || '');
+          return String(timeB).localeCompare(String(timeA));
+        });
         setHistory(att.slice(0, 10));
 
         const now = new Date();
         const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-        const todayAtt = att.find((a: any) => a.date === todayStr);
+        const todayAtt = att.find((a: any) => (a.date === todayStr || a.workDate === todayStr));
         setTodayAttendance(todayAtt || null);
       } catch (err) {
-        console.error(err);
+        console.error('Gagal memuat data pegawai:', err);
       } finally {
         setLoading(false);
       }
@@ -60,7 +85,10 @@ export default function EmployeeDashboard() {
   const handleLogout = () => { signOut(auth); };
 
   const handleAbsenMasuk = async () => {
-    if (!profile) return;
+    if (!profile) {
+      alert("Data profil pegawai belum siap. Silakan muat ulang halaman.");
+      return;
+    }
     setActionLoading(true);
     try {
       const now = new Date();
@@ -69,12 +97,12 @@ export default function EmployeeDashboard() {
       let lat = 0, lng = 0;
       try {
         const pos: any = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, enableHighAccuracy: true });
         });
         lat = pos.coords.latitude;
         lng = pos.coords.longitude;
-      } catch (e) {
-        console.warn('Geolocation blocked or failed', e);
+      } catch (e: any) {
+        console.warn('Geolocation tidak dapat diakses atau ditolak', e);
       }
 
       const hour = now.getHours();
@@ -82,25 +110,41 @@ export default function EmployeeDashboard() {
 
       const data = {
         employeeId: auth.currentUser!.uid,
-        employeeName: profile.name,
-        branchId: profile.branchId,
+        employeeName: profile.name || 'Pegawai',
+        branchId: profile.branchId || 'HQ-01',
+        shiftId: profile.currentShiftId || 'default',
         date: todayStr,
+        workDate: todayStr,
         checkInTime: now.toISOString(),
+        checkIn: {
+          timestamp: serverTimestamp(),
+          latitude: lat,
+          longitude: lng,
+          accuracy: 10,
+          distanceMeters: 0,
+          deviceId: 'web-browser',
+          locationName: 'Web Browser'
+        },
         checkOutTime: null,
+        checkOut: null,
         locationLat: lat,
         locationLng: lng,
         locationName: "Web Browser",
         isFakeGps: false,
         status: status,
+        lateMinutes: hour >= 8 ? (hour - 8) * 60 + now.getMinutes() : 0,
+        earlyCheckoutMinutes: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
 
       const docRef = await addDoc(collection(db, 'attendance'), data);
       const newAtt = { id: docRef.id, ...data };
       setTodayAttendance(newAtt);
       setHistory(prev => [newAtt, ...prev].slice(0, 10));
-      alert("Berhasil Absen Masuk!");
+      alert("✓ Berhasil Absen Masuk!");
     } catch (e: any) {
-      alert("Gagal absen: " + e.message);
+      alert("Gagal melakukan absen masuk:\n" + formatErrorMessage(e));
     } finally {
       setActionLoading(false);
     }
@@ -110,13 +154,38 @@ export default function EmployeeDashboard() {
     if (!todayAttendance) return;
     setActionLoading(true);
     try {
-      const now = new Date().toISOString();
-      await updateDoc(doc(db, 'attendance', todayAttendance.id), { checkOutTime: now });
-      setTodayAttendance((prev: any) => ({ ...prev, checkOutTime: now }));
-      setHistory(prev => prev.map((a: any) => a.id === todayAttendance.id ? { ...a, checkOutTime: now } : a));
-      alert("Berhasil Absen Pulang!");
+      const now = new Date();
+      const nowIso = now.toISOString();
+
+      let lat = 0, lng = 0;
+      try {
+        const pos: any = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, enableHighAccuracy: true });
+        });
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+      } catch (e) {
+        console.warn('Geolocation tidak dapat diakses', e);
+      }
+
+      await updateDoc(doc(db, 'attendance', todayAttendance.id), {
+        checkOutTime: nowIso,
+        checkOut: {
+          timestamp: serverTimestamp(),
+          latitude: lat,
+          longitude: lng,
+          accuracy: 10,
+          deviceId: 'web-browser',
+        },
+        status: todayAttendance.status || 'Hadir',
+        updatedAt: serverTimestamp(),
+      });
+
+      setTodayAttendance((prev: any) => ({ ...prev, checkOutTime: nowIso, checkOut: { timestamp: new Date() } }));
+      setHistory(prev => prev.map((a: any) => a.id === todayAttendance.id ? { ...a, checkOutTime: nowIso } : a));
+      alert("✓ Berhasil Absen Pulang!");
     } catch (e: any) {
-      alert("Gagal absen: " + e.message);
+      alert("Gagal melakukan absen pulang:\n" + formatErrorMessage(e));
     } finally {
       setActionLoading(false);
     }
@@ -124,44 +193,89 @@ export default function EmployeeDashboard() {
 
   const handleSubmitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile) return;
+    if (!profile) {
+      alert("Data profil pegawai belum siap.");
+      return;
+    }
     setActionLoading(true);
     try {
-      const { addDoc: add, collection: col } = await import('firebase/firestore');
-      await add(col(db, 'leave_requests'), {
+      await addDoc(collection(db, 'leave_requests'), {
         employeeId: auth.currentUser!.uid,
         employeeName: profile.name,
-        branchId: profile.branchId,
+        branchId: profile.branchId || 'HQ-01',
         type: requestForm.type,
         date: requestForm.startDate,
         startDate: requestForm.startDate,
         endDate: requestForm.endDate || requestForm.startDate,
         reason: requestForm.reason,
         status: 'PENDING',
-        createdAt: new Date().toISOString()
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
-      alert('Pengajuan berhasil dikirim!');
+      alert('✓ Pengajuan berhasil dikirim! Menunggu persetujuan admin.');
       setShowRequestModal(false);
       setRequestForm({ type: 'Izin', startDate: '', endDate: '', reason: '' });
     } catch (e: any) {
-      alert("Gagal mengirim pengajuan: " + e.message);
+      alert("Gagal mengirim pengajuan:\n" + formatErrorMessage(e));
     } finally {
       setActionLoading(false);
     }
   };
 
-  const fmtTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  const fmtTime = (val: any) => {
+    if (!val) return '--:--';
+    if (typeof val === 'string') {
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? '--:--' : d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    }
+    if (val && typeof val.toDate === 'function') {
+      return val.toDate().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    }
+    if (val && val.seconds) {
+      return new Date(val.seconds * 1000).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    }
+    return '--:--';
+  };
 
-  const fmtDate = (iso: string) =>
-    new Date(iso).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const fmtDate = (val: any) => {
+    if (!val) return '-';
+    if (typeof val === 'string') {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+        const [y, m, d] = val.split('-').map(Number);
+        return new Date(y, m - 1, d).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      }
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? val : d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+    if (val && typeof val.toDate === 'function') {
+      return val.toDate().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+    return '-';
+  };
+
+  const getStatusText = (status: string) => {
+    const s = (status || 'Hadir').toLowerCase();
+    if (s === 'late' || s === 'terlambat') return 'Terlambat';
+    if (s === 'permission' || s === 'izin') return 'Izin';
+    if (s === 'sick' || s === 'sakit') return 'Sakit';
+    if (s === 'leave' || s === 'cuti') return 'Cuti';
+    if (s === 'business_trip' || s === 'dinas') return 'Dinas';
+    if (s === 'early_checkout') return 'Pulang Cepat';
+    if (s === 'present' || s === 'hadir') return 'Hadir';
+    return status || 'Hadir';
+  };
 
   const getStatusBadge = (item: any) => {
-    const s = item.status || 'Hadir';
-    if (s === 'Terlambat') return 'bg-amber-100 text-amber-700';
-    if (s === 'Izin' || s === 'Sakit') return 'bg-blue-100 text-blue-700';
+    const s = getStatusText(item.status);
+    if (s === 'Terlambat' || s === 'Pulang Cepat') return 'bg-amber-100 text-amber-700';
+    if (s === 'Izin' || s === 'Sakit' || s === 'Cuti' || s === 'Dinas') return 'bg-blue-100 text-blue-700';
     return 'bg-green-100 text-green-700';
   };
+
+  const isCheckedIn = !!todayAttendance;
+  const isCheckedOut = !!(todayAttendance?.checkOutTime || todayAttendance?.checkOut);
+  const checkInDisplay = todayAttendance ? (todayAttendance.checkInTime || todayAttendance.checkIn?.timestamp) : null;
+  const checkOutDisplay = todayAttendance ? (todayAttendance.checkOutTime || todayAttendance.checkOut?.timestamp) : null;
 
   if (loading) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -214,7 +328,7 @@ export default function EmployeeDashboard() {
           <h3 className="text-sm font-bold text-gray-800">Status Kehadiran Hari Ini</h3>
           <p className="text-xs text-gray-400 mt-0.5 mb-4">{todayLabel}</p>
 
-          {!todayAttendance ? (
+          {!isCheckedIn ? (
             /* Belum absen sama sekali */
             <button
               onClick={handleAbsenMasuk}
@@ -224,12 +338,12 @@ export default function EmployeeDashboard() {
               <Fingerprint className="w-5 h-5" />
               {actionLoading ? 'Memproses...' : 'Absen Masuk'}
             </button>
-          ) : !todayAttendance.checkOutTime ? (
+          ) : !isCheckedOut ? (
             /* Sudah masuk, belum pulang */
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-xl px-4 py-3 border border-green-200">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                <span className="font-medium">Masuk: {fmtTime(todayAttendance.checkInTime)}</span>
+                <span className="font-medium">Masuk: {fmtTime(checkInDisplay)}</span>
               </div>
               <button
                 onClick={handleAbsenPulang}
@@ -245,11 +359,11 @@ export default function EmployeeDashboard() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-xl px-4 py-3 border border-green-200">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                <span className="font-medium">Masuk: {fmtTime(todayAttendance.checkInTime)}</span>
+                <span className="font-medium">Masuk: {fmtTime(checkInDisplay)}</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 rounded-xl px-4 py-3 border border-blue-200">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                <span className="font-medium">Pulang: {fmtTime(todayAttendance.checkOutTime)}</span>
+                <span className="font-medium">Pulang: {fmtTime(checkOutDisplay)}</span>
               </div>
             </div>
           )}
@@ -276,39 +390,45 @@ export default function EmployeeDashboard() {
             </div>
           ) : (
             <div className="divide-y divide-gray-100">
-              {history.map(item => (
-                <div key={item.id} className="px-4 py-3 flex items-start justify-between gap-3">
-                  {/* Kiri: tanggal & lokasi */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 mb-1">
-                      <Calendar className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                      <span className="truncate">{fmtDate(item.checkInTime)}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                      <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                      <span className="truncate">{item.locationName || 'Lokasi tidak diketahui'}</span>
-                    </div>
-                    {/* Badge status */}
-                    <span className={`inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full ${getStatusBadge(item)}`}>
-                      {item.status || 'Hadir'}
-                    </span>
-                  </div>
+              {history.map(item => {
+                const inTime = item.checkInTime || item.checkIn?.timestamp || item.createdAt;
+                const outTime = item.checkOutTime || item.checkOut?.timestamp || item.updatedAt;
+                const recDate = item.date || item.workDate || item.checkInTime || (item.createdAt?.toDate ? item.createdAt.toDate().toISOString() : null);
 
-                  {/* Kanan: jam masuk & pulang */}
-                  <div className="flex gap-2 flex-shrink-0">
-                    <div className="text-center bg-green-50 rounded-lg px-3 py-1.5 border border-green-100">
-                      <div className="text-[10px] text-green-600 font-medium">Masuk</div>
-                      <div className="text-xs font-bold text-green-700">{fmtTime(item.checkInTime)}</div>
+                return (
+                  <div key={item.id} className="px-4 py-3 flex items-start justify-between gap-3">
+                    {/* Kiri: tanggal & lokasi */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 mb-1">
+                        <Calendar className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                        <span className="truncate">{fmtDate(recDate)}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                        <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span className="truncate">{item.locationName || 'Lokasi tidak diketahui'}</span>
+                      </div>
+                      {/* Badge status */}
+                      <span className={`inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full ${getStatusBadge(item)}`}>
+                        {getStatusText(item.status)}
+                      </span>
                     </div>
-                    <div className="text-center bg-blue-50 rounded-lg px-3 py-1.5 border border-blue-100">
-                      <div className="text-[10px] text-blue-600 font-medium">Pulang</div>
-                      <div className="text-xs font-bold text-blue-700">
-                        {item.checkOutTime ? fmtTime(item.checkOutTime) : '-'}
+
+                    {/* Kanan: jam masuk & pulang */}
+                    <div className="flex gap-2 flex-shrink-0">
+                      <div className="text-center bg-green-50 rounded-lg px-3 py-1.5 border border-green-100">
+                        <div className="text-[10px] text-green-600 font-medium">Masuk</div>
+                        <div className="text-xs font-bold text-green-700">{fmtTime(inTime)}</div>
+                      </div>
+                      <div className="text-center bg-blue-50 rounded-lg px-3 py-1.5 border border-blue-100">
+                        <div className="text-[10px] text-blue-600 font-medium">Pulang</div>
+                        <div className="text-xs font-bold text-blue-700">
+                          {outTime && (item.checkOutTime || item.checkOut) ? fmtTime(outTime) : '-'}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
