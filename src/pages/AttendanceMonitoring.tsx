@@ -93,14 +93,20 @@ export default function AttendanceMonitoring() {
         const leaveSnap = await getDocs(collection(db, 'leave_requests'));
         leaveSnap.forEach(doc => {
           const d = doc.data();
-          if (d.status === 'APPROVED' && (d.date === filterDate || d.startDate === filterDate)) {
+          const statusLower = (d.status || '').toLowerCase();
+          const isApproved = statusLower === 'approved';
+          const isToday = d.date === filterDate || d.startDate === filterDate ||
+            (d.startDate && d.endDate && d.startDate <= filterDate && d.endDate >= filterDate);
+          if (isApproved && isToday) {
              // check if not already in attendance
              if (!data.find(a => a.employeeId === d.employeeId)) {
                 const emp = empMap[d.employeeId] || {};
-                let status = 'permission';
-                if (d.type === 'Sakit') status = 'sick';
-                else if (d.type === 'Cuti') status = 'leave';
-                else if (d.type === 'Dinas') status = 'business_trip';
+                // type dari Flutter: 'permission'|'sick'|'leave'|'business_trip'
+                let status: AttendanceRecord['status'] = 'permission';
+                const t = (d.type || '').toLowerCase();
+                if (t === 'sick' || t === 'sakit') status = 'sick';
+                else if (t === 'leave' || t === 'cuti') status = 'leave';
+                else if (t === 'business_trip' || t === 'dinas') status = 'business_trip';
                 
                 data.push({
                   id: doc.id,
@@ -109,7 +115,7 @@ export default function AttendanceMonitoring() {
                   branchId: emp.branchId || '-',
                   shiftName: '-',
                   workDate: filterDate,
-                  status: status as any,
+                  status: status,
                 });
              }
           }

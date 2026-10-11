@@ -216,12 +216,72 @@ export const AdminServices = {
         q = query(q, where("branchId", "==", branchId));
       }
       const querySnapshot = await getDocs(q);
-      const employees = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee));
-      return employees.filter(e => !(e as any).migrated);
+      const allDocs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee & { migrated?: boolean }));
+
+      // 1. Buang dokumen yang sudah di-mark migrated
+      const nonMigrated = allDocs.filter(e => !(e as any).migrated);
+
+      // 2. Deduplikasi: pisahkan dokumen Auth-UID (≥28 chars) dan dokumen Firestore auto-ID (≤20 chars)
+      const authDocs   = nonMigrated.filter(e => e.id!.length >= 28);
+      const legacyDocs = nonMigrated.filter(e => e.id!.length < 28);
+
+      // Buat set identitas unik dari auth docs (STR + phone)
+      const authKeys = new Set<string>();
+      authDocs.forEach(e => {
+        const key = `${(e as any).strNumber || ''}|${(e as any).phone || ''}`;
+        if (key !== '|') authKeys.add(key);
+      });
+
+      // Hanya sertakan legacy docs yang TIDAK punya padanan di auth docs
+      const uniqueLegacy = legacyDocs.filter(e => {
+        const key = `${(e as any).strNumber || ''}|${(e as any).phone || ''}`;
+        return key === '|' || !authKeys.has(key);
+      });
+
+      return [...authDocs, ...uniqueLegacy];
     } catch (error) {
       console.error("Gagal mengambil data pegawai:", error);
       throw error;
     }
+  },
+
+  // Hapus dokumen pegawai lama (legacy auto-ID) yang sudah punya padanan auth-UID
+  async cleanupDuplicateEmployees(): Promise<{ deleted: number; marked: number; errors: number }> {
+    const querySnapshot = await getDocs(collection(db, 'employees'));
+    const allDocs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+
+    const nonMigrated = allDocs.filter((e: any) => !e.migrated);
+    const authDocs    = nonMigrated.filter((e: any) => e.id.length >= 28);
+    const legacyDocs  = nonMigrated.filter((e: any) => e.id.length < 28);
+
+    // Buat set identitas unik dari auth docs
+    const authKeys = new Set<string>();
+    authDocs.forEach((e: any) => {
+      const key = `${e.strNumber || ''}|${e.phone || ''}`;
+      if (key !== '|') authKeys.add(key);
+    });
+
+    let deleted = 0, marked = 0, errors = 0;
+
+    for (const legacy of legacyDocs) {
+      const key = `${legacy.strNumber || ''}|${legacy.phone || ''}`;
+      const isDuplicate = key !== '|' && authKeys.has(key);
+      if (!isDuplicate) continue;
+
+      try {
+        await deleteDoc(doc(db, 'employees', legacy.id));
+        deleted++;
+      } catch {
+        try {
+          await updateDoc(doc(db, 'employees', legacy.id), { migrated: true });
+          marked++;
+        } catch {
+          errors++;
+        }
+      }
+    }
+
+    return { deleted, marked, errors };
   },
 
   async resetDeviceBinding(employeeId: string): Promise<void> {

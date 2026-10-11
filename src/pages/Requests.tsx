@@ -35,10 +35,19 @@ export default function Requests() {
       
       leaveSnap.docs.forEach(doc => {
         const d = doc.data();
+        // Normalize type dari Flutter (English) ke label Indonesia
+        const typeMap: Record<string, string> = {
+          'permission': 'Izin',
+          'sick': 'Sakit',
+          'leave': 'Cuti',
+          'business_trip': 'Dinas',
+        };
+        const rawType = d.type || 'Izin';
+        const displayType = typeMap[rawType] ?? rawType;
         all.push({
           id: doc.id,
           employeeName: d.employeeName || empMap[d.employeeId] || 'Unknown',
-          type: d.type || 'Izin',
+          type: displayType,
           date: d.date || d.startDate || '-',
           reason: d.reason || '-',
           status: (d.status || 'PENDING').toUpperCase() as any

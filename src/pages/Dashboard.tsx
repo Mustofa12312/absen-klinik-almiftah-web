@@ -225,54 +225,113 @@ function Overview() {
         const now = new Date();
         const todayStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
         
-        // 1. Employees
+        // 1. Employees — filter migrated docs + deduplikasi legacy
         const empSnap = await getDocs(collection(db, 'employees'));
+        const allEmpDocs = empSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Buang dokumen migrated
+        const nonMigrated = allEmpDocs.filter((d: any) => !d.migrated);
+        // Pisahkan auth UID (≥28 chars) vs legacy auto-ID (<28 chars)
+        const authEmpDocs   = nonMigrated.filter((d: any) => d.id.length >= 28);
+        const legacyEmpDocs = nonMigrated.filter((d: any) => d.id.length < 28);
+        // Buat set key unik dari auth docs
+        const authEmpKeys = new Set<string>();
+        authEmpDocs.forEach((d: any) => {
+          const key = `${d.strNumber || ''}|${d.phone || ''}`;
+          if (key !== '|') authEmpKeys.add(key);
+        });
+        // Gabungkan: auth docs + legacy yg tidak punya padanan
+        const uniqueEmpDocs = [
+          ...authEmpDocs,
+          ...legacyEmpDocs.filter((d: any) => {
+            const key = `${d.strNumber || ''}|${d.phone || ''}`;
+            return key === '|' || !authEmpKeys.has(key);
+          })
+        ];
+
         let totalActive = 0;
         let inactive = 0;
-        empSnap.forEach(doc => {
-          const d = doc.data();
-          // Konsisten: gunakan field 'status' bukan 'isActive'
-          if (d.status === 'inactive') inactive++;
-          else totalActive++;
+        const activeEmployeeIds = new Set<string>();
+        uniqueEmpDocs.forEach((d: any) => {
+          if (d.status === 'inactive') {
+            inactive++;
+          } else {
+            totalActive++;
+            activeEmployeeIds.add(d.id);
+          }
         });
 
-        // 2. Attendance
-        const attQuery = query(collection(db, 'attendance'), where('workDate', '==', todayStr));
+        // 2. Attendance — hanya hitung pegawai aktif
+        let attQuery;
+        if (selectedBranch) {
+          attQuery = query(
+            collection(db, 'attendance'),
+            where('workDate', '==', todayStr),
+            where('branchId', '==', selectedBranch)
+          );
+        } else {
+          attQuery = query(collection(db, 'attendance'), where('workDate', '==', todayStr));
+        }
         const attSnap = await getDocs(attQuery);
         let present = 0;
         let late = 0;
+        const presentEmployeeIds = new Set<string>();
         attSnap.forEach(doc => {
-          present++;
           const d = doc.data();
-          if (d.lateMinutes > 0 || d.status === 'late') late++;
+          // Hanya hitung jika pegawai aktif
+          if (activeEmployeeIds.has(d.employeeId)) {
+            present++;
+            presentEmployeeIds.add(d.employeeId);
+            // Status 'late' dari Flutter (lowercase)
+            if (d.lateMinutes > 0 || d.status === 'late') late++;
+          }
         });
 
-        // 3. Requests (Leave & Correction)
+        // 3. Leave Requests — Flutter menyimpan status lowercase & type dalam bahasa Inggris
+        // status: 'pending' | 'approved' | 'rejected'
+        // type:   'permission' | 'sick' | 'leave' | 'business_trip'
         const leaveSnap = await getDocs(collection(db, 'leave_requests'));
         const corrSnap = await getDocs(collection(db, 'correction_requests'));
         let izin = 0, sakit = 0, cuti = 0, dinas = 0, pending = 0;
+        const onLeaveEmployeeIds = new Set<string>();
 
         leaveSnap.forEach(doc => {
           const d = doc.data();
-          if (d.status === 'PENDING') pending++;
-          if (d.status === 'APPROVED' && (d.date === todayStr || d.startDate === todayStr)) {
-            if (d.type === 'Izin') izin++;
-            if (d.type === 'Sakit') sakit++;
-            if (d.type === 'Cuti') cuti++;
-            if (d.type === 'Dinas') dinas++;
+          const statusLower = (d.status || '').toLowerCase();
+          // Filter per cabang jika dipilih
+          if (selectedBranch && d.branchId !== selectedBranch) return;
+          // Hitung pending: status lowercase dari Flutter
+          if (statusLower === 'pending') pending++;
+          // Hitung izin/sakit/cuti/dinas yang disetujui hari ini
+          if (statusLower === 'approved') {
+            const isToday = d.date === todayStr || d.startDate === todayStr ||
+              // Range: startDate <= today <= endDate
+              (d.startDate && d.endDate && d.startDate <= todayStr && d.endDate >= todayStr);
+            if (isToday && activeEmployeeIds.has(d.employeeId)) {
+              onLeaveEmployeeIds.add(d.employeeId);
+              // type dari Flutter: 'permission'|'sick'|'leave'|'business_trip'
+              // Juga support tipe lama dalam bahasa Indonesia untuk backward compat
+              const t = (d.type || '').toLowerCase();
+              if (t === 'permission' || t === 'izin') izin++;
+              else if (t === 'sick' || t === 'sakit') sakit++;
+              else if (t === 'leave' || t === 'cuti') cuti++;
+              else if (t === 'business_trip' || t === 'dinas') dinas++;
+            }
           }
         });
 
         corrSnap.forEach(doc => {
-          if (doc.data().status === 'PENDING') pending++;
+          const d = doc.data();
+          const statusLower = (d.status || '').toLowerCase();
+          if (selectedBranch && d.branchId !== selectedBranch) return;
+          if (statusLower === 'pending') pending++;
         });
 
-        // 4. Security Events — field 'createdAt' bukan 'timestamp'
+        // 4. Security Events — field 'createdAt' (Firestore Timestamp dari Flutter)
         const secSnap = await getDocs(collection(db, 'security_events'));
         let secEvents = 0;
         secSnap.forEach(doc => {
           const d = doc.data();
-          // Coba field createdAt (Timestamp Firestore) atau timestamp
+          if (selectedBranch && d.branchId !== selectedBranch) return;
           const tsRaw = d.createdAt || d.timestamp;
           if (tsRaw) {
             const tsDate = tsRaw.toDate ? tsRaw.toDate() : new Date(tsRaw);
@@ -280,7 +339,12 @@ function Overview() {
           }
         });
 
-        const notCheckedIn = Math.max(0, totalActive - (present + izin + sakit + cuti + dinas));
+        // Belum absen = aktif - (sudah hadir) - (sedang cuti/izin/sakit/dinas)
+        const coveredIds = new Set([...presentEmployeeIds, ...onLeaveEmployeeIds]);
+        let notCheckedIn = 0;
+        activeEmployeeIds.forEach(id => {
+          if (!coveredIds.has(id)) notCheckedIn++;
+        });
 
         setData({
           totalEmployees: (totalActive + inactive).toString(),
@@ -297,7 +361,7 @@ function Overview() {
         });
 
       } catch (e) {
-        console.error(e);
+        console.error('Dashboard fetch error:', e);
       }
     };
     fetchData();
@@ -323,7 +387,7 @@ function Overview() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Ringkasan Hari Ini</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} — Semua Cabang
+            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} — {selectedBranch ? (branches.find(b => b.id === selectedBranch)?.name ?? 'Cabang Terpilih') : 'Semua Cabang'}
           </p>
         </div>
         <select

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Plus, Search, Smartphone, ShieldAlert, Edit2, MoreVertical, ShieldCheck, Upload, Download, FileText, X } from 'lucide-react';
+import { getDocs, collection } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { AdminServices } from '../lib/services';
 import type { Employee, Branch } from '../lib/services';
 
@@ -14,6 +16,8 @@ export default function Employees() {
   const [employeeForm, setEmployeeForm] = useState({ name: '', role: 'Staff', branchId: '', strNumber: '', phone: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGeneratingAuth, setIsGeneratingAuth] = useState(false);
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
+  const [duplicateCount, setDuplicateCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -36,8 +40,21 @@ export default function Employees() {
   const fetchEmployees = async () => {
     setLoading(true);
     try {
+      // Ambil data bersih (sudah di-dedup)
       const data = await AdminServices.getEmployeesByBranch();
       setEmployees(data);
+
+      // Hitung duplikat dari raw Firestore (sebelum dedup)
+      const rawSnap = await getDocs(collection(db, 'employees'));
+      const rawDocs = rawSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      const nonMigrated = rawDocs.filter((e: any) => !e.migrated);
+      const authIds = new Set(nonMigrated.filter((e: any) => e.id.length >= 28).map((e: any) => `${e.strNumber || ''}|${e.phone || ''}`))
+      const legacyDups = nonMigrated.filter((e: any) => {
+        if (e.id.length >= 28) return false;
+        const key = `${e.strNumber || ''}|${e.phone || ''}`;
+        return key !== '|' && authIds.has(key);
+      });
+      setDuplicateCount(legacyDups.length);
     } catch (e) {
       console.error(e);
     } finally {
@@ -262,6 +279,20 @@ export default function Employees() {
     }
   };
 
+  const handleCleanupDuplicates = async () => {
+    if (!window.confirm(`Hapus ${duplicateCount} dokumen pegawai lama (duplikat) dari Firestore? Data pegawai baru yang sudah memiliki akun Auth tetap aman.`)) return;
+    setIsCleaningUp(true);
+    try {
+      const result = await AdminServices.cleanupDuplicateEmployees();
+      alert(`Selesai!\nDihapus: ${result.deleted}\nDitandai migrated: ${result.marked}\nGagal: ${result.errors}`);
+      fetchEmployees();
+    } catch (e) {
+      alert('Gagal membersihkan duplikat');
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+
   const branchMap = Object.fromEntries(branches.map(b => [b.id, b.name]));
 
   const filtered = employees.filter(e => {
@@ -311,11 +342,22 @@ export default function Employees() {
           {employees.some(e => !e.id || e.id.length < 28) && (
             <button 
               onClick={handleGenerateAuth}
-              disabled={isSubmitting || isGeneratingAuth}
+              disabled={isSubmitting || isGeneratingAuth || isCleaningUp}
               className="inline-flex items-center justify-center px-2 sm:px-4 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-lg shadow-sm text-white bg-amber-600 hover:bg-amber-700 focus:outline-none transition-colors disabled:opacity-50 col-span-2 sm:col-span-1"
             >
               <ShieldAlert className="w-4 h-4 mr-2" />
               {isGeneratingAuth ? 'Memproses...' : 'Buat Akun Login'}
+            </button>
+          )}
+
+          {duplicateCount > 0 && (
+            <button
+              onClick={handleCleanupDuplicates}
+              disabled={isSubmitting || isGeneratingAuth || isCleaningUp}
+              className="inline-flex items-center justify-center px-2 sm:px-4 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-lg shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none transition-colors disabled:opacity-50 col-span-2 sm:col-span-1"
+            >
+              <X className="w-4 h-4 mr-2" />
+              {isCleaningUp ? 'Membersihkan...' : `Hapus ${duplicateCount} Duplikat`}
             </button>
           )}
 
