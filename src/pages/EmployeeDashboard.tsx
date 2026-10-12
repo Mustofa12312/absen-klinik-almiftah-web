@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { LogOut, User, Calendar, Clock, Fingerprint, CheckCircle2, FileText, X, MapPin } from 'lucide-react';
+import { LogOut, User, Calendar, Fingerprint, CheckCircle2, FileText, X, MapPin } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { formatErrorMessage } from '../lib/errorUtils';
 
@@ -154,12 +154,12 @@ export default function EmployeeDashboard() {
     }
   };
 
-  const handleAbsenPulang = async () => {
-    if (!todayAttendance) return;
+  const handleAbsenKeluar = async () => {
     setActionLoading(true);
     try {
       const now = new Date();
       const nowIso = now.toISOString();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
       let lat = 0, lng = 0;
       try {
@@ -172,24 +172,65 @@ export default function EmployeeDashboard() {
         console.warn('Geolocation tidak dapat diakses', e);
       }
 
-      await updateDoc(doc(db, 'attendance', todayAttendance.id), {
-        checkOutTime: nowIso,
-        checkOut: {
-          timestamp: serverTimestamp(),
-          latitude: lat,
-          longitude: lng,
-          accuracy: 10,
-          deviceId: 'web-browser',
-        },
-        status: todayAttendance.status || 'Hadir',
-        updatedAt: serverTimestamp(),
-      });
+      if (todayAttendance) {
+        await updateDoc(doc(db, 'attendance', todayAttendance.id), {
+          checkOutTime: nowIso,
+          checkOut: {
+            timestamp: serverTimestamp(),
+            latitude: lat,
+            longitude: lng,
+            accuracy: 10,
+            deviceId: 'web-browser',
+          },
+          status: todayAttendance.status || 'Hadir',
+          updatedAt: serverTimestamp(),
+        });
 
-      setTodayAttendance((prev: any) => ({ ...prev, checkOutTime: nowIso, checkOut: { timestamp: new Date() } }));
-      setHistory(prev => prev.map((a: any) => a.id === todayAttendance.id ? { ...a, checkOutTime: nowIso } : a));
-      alert("✓ Berhasil Absen Pulang!");
+        setTodayAttendance((prev: any) => ({ ...prev, checkOutTime: nowIso, checkOut: { timestamp: new Date() } }));
+        setHistory(prev => prev.map((a: any) => a.id === todayAttendance.id ? { ...a, checkOutTime: nowIso } : a));
+      } else {
+        if (!profile) {
+          alert("Data profil pegawai belum siap. Silakan muat ulang halaman.");
+          return;
+        }
+
+        const data = {
+          employeeId: auth.currentUser!.uid,
+          employeeName: profile.name || 'Pegawai',
+          branchId: profile.branchId || 'HQ-01',
+          shiftId: profile.currentShiftId || 'default',
+          date: todayStr,
+          workDate: todayStr,
+          checkInTime: null,
+          checkIn: null,
+          checkOutTime: nowIso,
+          checkOut: {
+            timestamp: serverTimestamp(),
+            latitude: lat,
+            longitude: lng,
+            accuracy: 10,
+            deviceId: 'web-browser',
+          },
+          locationLat: lat,
+          locationLng: lng,
+          locationName: "Web Browser",
+          isFakeGps: false,
+          status: 'Hadir',
+          lateMinutes: 0,
+          earlyCheckoutMinutes: 0,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+
+        const docRef = await addDoc(collection(db, 'attendance'), data);
+        const newAtt = { id: docRef.id, ...data };
+        setTodayAttendance(newAtt);
+        setHistory(prev => [newAtt, ...prev].slice(0, 10));
+      }
+
+      alert("✓ Berhasil Absen Keluar!");
     } catch (e: any) {
-      alert("Gagal melakukan absen pulang:\n" + formatErrorMessage(e));
+      alert("Gagal melakukan absen keluar:\n" + formatErrorMessage(e));
     } finally {
       setActionLoading(false);
     }
@@ -328,49 +369,74 @@ export default function EmployeeDashboard() {
         </div>
 
         {/* ──── Status Kehadiran ──── */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h3 className="text-sm font-bold text-gray-800">Status Kehadiran Hari Ini</h3>
-          <p className="text-xs text-gray-400 mt-0.5 mb-4">{todayLabel}</p>
+        <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-gray-800">Status Kehadiran Hari Ini</h3>
+              <p className="text-xs text-gray-400 mt-0.5">{todayLabel}</p>
+            </div>
+            {isCheckedOut && (
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                Selesai Kerja ✓
+              </span>
+            )}
+          </div>
 
-          {!isCheckedIn ? (
-            /* Belum absen sama sekali */
+          {/* Kartu Jam Absensi */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className={`p-3 rounded-xl border ${checkInDisplay ? 'bg-green-50/70 border-green-200' : 'bg-gray-50 border-gray-100'}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-gray-500">Masuk</span>
+                {checkInDisplay && <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />}
+              </div>
+              <div className={`text-base font-bold mt-1 ${checkInDisplay ? 'text-green-700' : 'text-gray-400'}`}>
+                {fmtTime(checkInDisplay)}
+              </div>
+            </div>
+
+            <div className={`p-3 rounded-xl border ${checkOutDisplay ? 'bg-blue-50/70 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-gray-500">Keluar</span>
+                {checkOutDisplay && <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />}
+              </div>
+              <div className={`text-base font-bold mt-1 ${checkOutDisplay ? 'text-blue-700' : 'text-gray-400'}`}>
+                {fmtTime(checkOutDisplay)}
+              </div>
+            </div>
+          </div>
+
+          {/* Tombol Absen: Absen Masuk & Absen Keluar */}
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            {/* Tombol Absen Masuk */}
             <button
               onClick={handleAbsenMasuk}
-              disabled={actionLoading}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold text-sm transition-colors disabled:opacity-50"
+              disabled={actionLoading || isCheckedIn}
+              className={`flex items-center justify-center gap-2 py-3.5 px-3 rounded-xl font-bold text-sm transition-all ${
+                isCheckedIn
+                  ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-75'
+                  : 'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-sm active:scale-[0.98]'
+              }`}
             >
-              <Fingerprint className="w-5 h-5" />
-              {actionLoading ? 'Memproses...' : 'Absen Masuk'}
+              <Fingerprint className="w-5 h-5 flex-shrink-0" />
+              <span>{isCheckedIn ? 'Sudah Masuk' : 'Absen Masuk'}</span>
             </button>
-          ) : !isCheckedOut ? (
-            /* Sudah masuk, belum pulang */
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-xl px-4 py-3 border border-green-200">
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                <span className="font-medium">Masuk: {fmtTime(checkInDisplay)}</span>
-              </div>
-              <button
-                onClick={handleAbsenPulang}
-                disabled={actionLoading}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white font-semibold text-sm transition-colors disabled:opacity-50"
-              >
-                <Clock className="w-5 h-5" />
-                {actionLoading ? 'Memproses...' : 'Absen Pulang'}
-              </button>
-            </div>
-          ) : (
-            /* Sudah masuk & pulang */
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-xl px-4 py-3 border border-green-200">
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                <span className="font-medium">Masuk: {fmtTime(checkInDisplay)}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 rounded-xl px-4 py-3 border border-blue-200">
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                <span className="font-medium">Pulang: {fmtTime(checkOutDisplay)}</span>
-              </div>
-            </div>
-          )}
+
+            {/* Tombol Absen Keluar */}
+            <button
+              onClick={handleAbsenKeluar}
+              disabled={actionLoading || isCheckedOut}
+              className={`flex items-center justify-center gap-2 py-3.5 px-3 rounded-xl font-bold text-sm transition-all ${
+                isCheckedOut
+                  ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-75'
+                  : isCheckedIn
+                  ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-md shadow-blue-500/20 active:scale-[0.98]'
+                  : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-sm active:scale-[0.98]'
+              }`}
+            >
+              <LogOut className="w-5 h-5 flex-shrink-0" />
+              <span>{isCheckedOut ? 'Sudah Keluar' : 'Absen Keluar'}</span>
+            </button>
+          </div>
         </div>
 
         {/* ──── Riwayat & Pengajuan ──── */}
@@ -435,17 +501,6 @@ export default function EmployeeDashboard() {
               })}
             </div>
           )}
-        </div>
-
-        {/* ──── Tombol Keluar dari Akun (Identik dengan Android) ──── */}
-        <div className="pt-2 pb-2">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold text-sm shadow-md shadow-red-500/10 transition-all active:scale-[0.99]"
-          >
-            <LogOut className="w-5 h-5" />
-            Keluar dari Akun
-          </button>
         </div>
 
         {/* ──── Footer ──── */}
