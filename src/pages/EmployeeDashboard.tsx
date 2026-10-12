@@ -82,7 +82,11 @@ export default function EmployeeDashboard() {
     fetchData();
   }, []);
 
-  const handleLogout = () => { signOut(auth); };
+  const handleLogout = async () => {
+    if (window.confirm('Apakah Anda yakin ingin keluar dari akun?')) {
+      await signOut(auth);
+    }
+  };
 
   const handleAbsenMasuk = async () => {
     if (!profile) {
@@ -431,6 +435,17 @@ export default function EmployeeDashboard() {
               })}
             </div>
           )}
+        </div>
+
+        {/* ──── Tombol Keluar dari Akun (Identik dengan Android) ──── */}
+        <div className="pt-2 pb-2">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold text-sm shadow-md shadow-red-500/10 transition-all active:scale-[0.99]"
+          >
+            <LogOut className="w-5 h-5" />
+            Keluar dari Akun
+          </button>
         </div>
 
         {/* ──── Footer ──── */}

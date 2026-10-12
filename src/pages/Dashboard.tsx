@@ -27,11 +27,13 @@ export default function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigate('/login');
-    } catch (e) {
-      console.error(e);
+    if (window.confirm('Apakah Anda yakin ingin keluar dari akun?')) {
+      try {
+        await signOut(auth);
+        navigate('/login');
+      } catch (e) {
+        console.error(e);
+      }
     }
   };
 
@@ -159,13 +161,23 @@ export default function Dashboard() {
             </button>
           </div>
           <div className="flex-1 flex justify-end">
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">Super Admin</span>
-              <img
-                className="h-8 w-8 rounded-full bg-gray-200"
-                src="https://ui-avatars.com/api/?name=Super+Admin&background=e06a00&color=fff"
-                alt=""
-              />
+            <div className="flex items-center space-x-3 sm:space-x-4">
+              <div className="flex items-center space-x-2">
+                <img
+                  className="h-8 w-8 rounded-full bg-gray-200 object-cover"
+                  src="https://ui-avatars.com/api/?name=Super+Admin&background=e06a00&color=fff"
+                  alt="Super Admin"
+                />
+                <span className="text-sm font-medium text-gray-700 hidden sm:inline">Super Admin</span>
+              </div>
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors active:scale-95"
+                title="Keluar dari akun"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Keluar</span>
+              </button>
             </div>
           </div>
         </header>
