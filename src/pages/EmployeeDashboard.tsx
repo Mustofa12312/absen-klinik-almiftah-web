@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
-import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { LogOut, User, Calendar, Fingerprint, CheckCircle2, FileText, X, MapPin } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { formatErrorMessage } from '../lib/errorUtils';
@@ -26,24 +26,25 @@ export default function EmployeeDashboard() {
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const user = auth.currentUser;
-        if (!user) return;
+    const user = auth.currentUser;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
-        // Coba ambil dari dokumen employees/{uid}
+    // 1. Ambil Profil Pegawai
+    const fetchProfile = async () => {
+      try {
         let empData: any = null;
         const empDoc = await getDoc(doc(db, 'employees', user.uid));
         if (empDoc.exists()) {
           empData = empDoc.data();
         } else {
-          // Fallback cari employee dengan userId == user.uid atau email
           const empQuery = query(collection(db, 'employees'), where('userId', '==', user.uid));
           const empSnap = await getDocs(empQuery);
           if (!empSnap.empty) {
             empData = empSnap.docs[0].data();
           } else {
-            // Default profil dari auth jika tidak ditemukan dokumen khusus
             empData = {
               name: user.displayName || user.email?.split('@')[0] || 'Pegawai',
               role: 'Pegawai',
@@ -53,33 +54,45 @@ export default function EmployeeDashboard() {
           }
         }
         setProfile(empData);
-
-        const q = query(
-          collection(db, 'attendance'),
-          where('employeeId', '==', user.uid)
-        );
-        const snap = await getDocs(q);
-        const att = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-
-        // Urutkan dari yang terbaru
-        att.sort((a, b) => {
-          const timeA = a.checkInTime || (a.createdAt?.toDate ? a.createdAt.toDate().toISOString() : a.date || '');
-          const timeB = b.checkInTime || (b.createdAt?.toDate ? b.createdAt.toDate().toISOString() : b.date || '');
-          return String(timeB).localeCompare(String(timeA));
-        });
-        setHistory(att.slice(0, 10));
-
-        const now = new Date();
-        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-        const todayAtt = att.find((a: any) => (a.date === todayStr || a.workDate === todayStr));
-        setTodayAttendance(todayAtt || null);
       } catch (err) {
-        console.error('Gagal memuat data pegawai:', err);
-      } finally {
-        setLoading(false);
+        console.error('Gagal memuat profil pegawai:', err);
       }
     };
-    fetchData();
+    fetchProfile();
+
+    // 2. Realtime Listener untuk Riwayat Absensi (sinkron otomatis Web & Android)
+    const q = query(
+      collection(db, 'attendance'),
+      where('employeeId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const att = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+
+      const getTimeVal = (item: any): string => {
+        if (item.checkInTime) return String(item.checkInTime);
+        if (item.createdAt?.toDate) return item.createdAt.toDate().toISOString();
+        if (item.checkIn?.timestamp?.toDate) return item.checkIn.timestamp.toDate().toISOString();
+        if (item.date) return String(item.date);
+        if (item.workDate) return String(item.workDate);
+        return '';
+      };
+
+      // Urutkan dari yang paling baru
+      att.sort((a, b) => getTimeVal(b).localeCompare(getTimeVal(a)));
+      setHistory(att.slice(0, 20));
+
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const todayAtt = att.find((a: any) => (a.date === todayStr || a.workDate === todayStr));
+      setTodayAttendance(todayAtt || null);
+      setLoading(false);
+    }, (err) => {
+      console.error('Gagal memuat riwayat absensi:', err);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleLogout = async () => {
@@ -490,7 +503,7 @@ export default function EmployeeDashboard() {
                         <div className="text-xs font-bold text-green-700">{fmtTime(inTime)}</div>
                       </div>
                       <div className="text-center bg-blue-50 rounded-lg px-3 py-1.5 border border-blue-100">
-                        <div className="text-[10px] text-blue-600 font-medium">Pulang</div>
+                        <div className="text-[10px] text-blue-600 font-medium">Keluar</div>
                         <div className="text-xs font-bold text-blue-700">
                           {outTime && (item.checkOutTime || item.checkOut) ? fmtTime(outTime) : '-'}
                         </div>
