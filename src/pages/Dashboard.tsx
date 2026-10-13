@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -224,7 +224,7 @@ function Overview() {
   const [branches, setBranches] = useState<{ id: string; name: string; code: string }[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
   
-  const todayLabel = useMemo(() => new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), []);
+  const [todayLabel] = useState(() => new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
 
   useEffect(() => {
     // Fetch branches for filter dropdown

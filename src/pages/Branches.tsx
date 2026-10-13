@@ -16,15 +16,15 @@ interface Branch {
 
 export default function Branches() {
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [branchForm, setBranchForm] = useState({ name: '', code: '', address: '', radius: 50 });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchBranches = async () => {
-    setLoading(true);
+  const fetchBranches = async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     try {
       const snap = await getDocs(collection(db, 'branches'));
       const data: Branch[] = [];

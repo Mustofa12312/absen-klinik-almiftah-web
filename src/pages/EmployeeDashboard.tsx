@@ -30,7 +30,7 @@ export default function EmployeeDashboard() {
   const [profileLoading, setProfileLoading] = useState(true);
   const [history, setHistory] = useState<any[]>([]);
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(auth.currentUser));
   const [actionLoading, setActionLoading] = useState(false);
   const [branchLocation, setBranchLocation] = useState<BranchLocation | null>(null);
   const [locationError, setLocationError] = useState<{ message: string; distance?: number } | null>(null);
@@ -44,16 +44,13 @@ export default function EmployeeDashboard() {
     reason: ''
   });
 
-  const todayLabel = new Date().toLocaleDateString('id-ID', {
+  const [todayLabel] = useState(() => new Date().toLocaleDateString('id-ID', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-  });
+  }));
 
   useEffect(() => {
     const user = auth.currentUser;
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+    if (!user) return;
 
     // 1. Ambil Profil Pegawai — dengan retry otomatis
     const fetchProfile = async (attempt = 1): Promise<void> => {
