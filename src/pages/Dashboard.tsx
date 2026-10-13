@@ -183,7 +183,7 @@ export default function Dashboard() {
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto bg-gray-50/50 p-6">
+        <div className="flex-1 overflow-y-auto bg-gray-50/50 p-4 sm:p-6 pb-20 md:pb-6">
           <Routes>
             <Route path="/"           element={<Overview />} />
             <Route path="/attendance" element={<AttendanceMonitoring />} />
@@ -199,6 +199,59 @@ export default function Dashboard() {
             <Route path="/audit"      element={<AuditLog />} />
           </Routes>
         </div>
+
+        {/* Mobile Bottom Navigation Bar (md:hidden) */}
+        <nav className="md:hidden flex-shrink-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-20">
+          <div className="grid grid-cols-5 h-16">
+            <Link
+              to="/dashboard"
+              className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+                location.pathname === '/dashboard' ? 'text-primary font-bold' : 'text-gray-400 font-medium'
+              }`}
+            >
+              <LayoutDashboard className="w-5 h-5" />
+              <span className="text-[10px]">Ringkasan</span>
+            </Link>
+
+            <Link
+              to="/dashboard/attendance"
+              className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+                location.pathname.startsWith('/dashboard/attendance') ? 'text-primary font-bold' : 'text-gray-400 font-medium'
+              }`}
+            >
+              <Activity className="w-5 h-5" />
+              <span className="text-[10px]">Monitoring</span>
+            </Link>
+
+            <Link
+              to="/dashboard/employees"
+              className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+                location.pathname.startsWith('/dashboard/employees') ? 'text-primary font-bold' : 'text-gray-400 font-medium'
+              }`}
+            >
+              <Users className="w-5 h-5" />
+              <span className="text-[10px]">Pegawai</span>
+            </Link>
+
+            <Link
+              to="/dashboard/reports"
+              className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+                location.pathname.startsWith('/dashboard/reports') ? 'text-primary font-bold' : 'text-gray-400 font-medium'
+              }`}
+            >
+              <BarChart2 className="w-5 h-5" />
+              <span className="text-[10px]">Laporan</span>
+            </Link>
+
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-gray-600 font-medium transition-colors"
+            >
+              <Menu className="w-5 h-5" />
+              <span className="text-[10px]">Menu</span>
+            </button>
+          </div>
+        </nav>
       </main>
     </div>
   );

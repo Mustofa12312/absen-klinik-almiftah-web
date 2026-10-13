@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
 import { formatErrorMessage } from '../lib/errorUtils';
 
 export default function Login() {
@@ -22,8 +23,6 @@ export default function Login() {
       const uid = userCredential.user.uid;
       
       // Check if user is super_admin
-      const { doc, getDoc, getFirestore } = await import('firebase/firestore');
-      const db = getFirestore();
       const userDoc = await getDoc(doc(db, 'users', uid));
       
       if (!userDoc.exists() || userDoc.data()?.role !== 'super_admin') {

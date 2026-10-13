@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { LogOut, User, Calendar, Fingerprint, CheckCircle2, FileText, X, MapPin, AlertTriangle, Navigation } from 'lucide-react';
+import { 
+  LogOut, User, Calendar, Fingerprint, CheckCircle2, FileText, X, 
+  MapPin, AlertTriangle, Navigation, Home, Clock, Building2, 
+  Phone, Award, ChevronRight, Plus, AlertCircle
+} from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { formatErrorMessage } from '../lib/errorUtils';
 
@@ -33,9 +37,14 @@ export default function EmployeeDashboard() {
   const [loading, setLoading] = useState(() => Boolean(auth.currentUser));
   const [actionLoading, setActionLoading] = useState(false);
   const [branchLocation, setBranchLocation] = useState<BranchLocation | null>(null);
+  const [shiftInfo, setShiftInfo] = useState<any>(null);
   const [locationError, setLocationError] = useState<{ message: string; distance?: number } | null>(null);
 
-  // Request Modal State
+  // Bottom Navigation Tab State: 'home' | 'history' | 'requests' | 'profile'
+  const [activeTab, setActiveTab] = useState<'home' | 'history' | 'requests' | 'profile'>('home');
+
+  // Request State
+  const [myRequests, setMyRequests] = useState<any[]>([]);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [requestForm, setRequestForm] = useState({
     type: 'Izin',
@@ -66,7 +75,6 @@ export default function EmployeeDashboard() {
           if (!empSnap.empty) {
             empData = empSnap.docs[0].data();
           } else {
-            // Fallback dari data auth
             empData = {
               name: user.displayName || user.email?.split('@')[0] || 'Pegawai',
               role: 'Pegawai',
@@ -97,14 +105,25 @@ export default function EmployeeDashboard() {
             console.warn('Gagal memuat data lokasi cabang:', branchErr);
           }
         }
+
+        // Ambil data shift pegawai
+        const sId = empData.currentShiftId || empData.shiftId;
+        if (sId) {
+          try {
+            const shiftDoc = await getDoc(doc(db, 'shifts', sId));
+            if (shiftDoc.exists()) {
+              setShiftInfo(shiftDoc.data());
+            }
+          } catch (shiftErr) {
+            console.warn('Gagal memuat shift pegawai:', shiftErr);
+          }
+        }
       } catch (err) {
         console.error(`Gagal memuat profil pegawai (percobaan ${attempt}):`, err);
         if (attempt < 3) {
-          // Retry dengan delay: 1s, 2s
           await new Promise(r => setTimeout(r, attempt * 1000));
           return fetchProfile(attempt + 1);
         }
-        // Setelah 3x gagal, tetap buat fallback agar UI tidak buntu
         setProfile({
           name: user.displayName || user.email?.split('@')[0] || 'Pegawai',
           role: 'Pegawai',
@@ -117,13 +136,13 @@ export default function EmployeeDashboard() {
     };
     fetchProfile();
 
-    // 2. Realtime Listener untuk Riwayat Absensi (sinkron otomatis Web & Android)
+    // 2. Realtime Listener untuk Riwayat Absensi
     const q = query(
       collection(db, 'attendance'),
       where('employeeId', '==', user.uid)
     );
 
-    const unsubscribe = onSnapshot(q, (snap) => {
+    const unsubAttendance = onSnapshot(q, (snap) => {
       const att = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
       const getTimeVal = (item: any): string => {
@@ -135,9 +154,8 @@ export default function EmployeeDashboard() {
         return '';
       };
 
-      // Urutkan dari yang paling baru
       att.sort((a, b) => getTimeVal(b).localeCompare(getTimeVal(a)));
-      setHistory(att.slice(0, 20));
+      setHistory(att);
 
       const now = new Date();
       const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -149,7 +167,28 @@ export default function EmployeeDashboard() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    // 3. Realtime Listener untuk Pengajuan Pegawai
+    const reqQ = query(
+      collection(db, 'leave_requests'),
+      where('employeeId', '==', user.uid)
+    );
+
+    const unsubRequests = onSnapshot(reqQ, (snap) => {
+      const reqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      reqs.sort((a: any, b: any) => {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().toISOString() : (a.startDate || '');
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().toISOString() : (b.startDate || '');
+        return timeB.localeCompare(timeA);
+      });
+      setMyRequests(reqs);
+    }, (err) => {
+      console.warn('Gagal memuat daftar permohonan:', err);
+    });
+
+    return () => {
+      unsubAttendance();
+      unsubRequests();
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -172,7 +211,6 @@ export default function EmployeeDashboard() {
   const validateLocation = async (): Promise<{ lat: number; lng: number; distanceMeters: number }> => {
     setLocationError(null);
 
-    // Jika data lokasi cabang belum tersedia, izinkan tetapi log peringatan
     if (!branchLocation) {
       console.warn('Data lokasi cabang tidak tersedia — validasi dilewati');
       return { lat: 0, lng: 0, distanceMeters: 0 };
@@ -259,7 +297,7 @@ export default function EmployeeDashboard() {
       const docRef = await addDoc(collection(db, 'attendance'), data);
       const newAtt = { id: docRef.id, ...data };
       setTodayAttendance(newAtt);
-      setHistory(prev => [newAtt, ...prev].slice(0, 10));
+      setHistory(prev => [newAtt, ...prev]);
       alert("✓ Berhasil Absen Masuk!");
     } catch (e: any) {
       if (!e?.isLocationError) {
@@ -295,19 +333,25 @@ export default function EmployeeDashboard() {
           updatedAt: serverTimestamp(),
         });
 
-        setTodayAttendance((prev: any) => ({ ...prev, checkOutTime: nowIso, checkOut: { timestamp: new Date() } }));
-        setHistory(prev => prev.map((a: any) => a.id === todayAttendance.id ? { ...a, checkOutTime: nowIso } : a));
+        const updated = {
+          ...todayAttendance,
+          checkOutTime: nowIso,
+          checkOut: {
+            latitude: lat,
+            longitude: lng,
+            accuracy: 10,
+            distanceMeters,
+            deviceId: 'web-browser',
+          }
+        };
+        setTodayAttendance(updated);
+        setHistory(prev => prev.map(a => a.id === updated.id ? updated : a));
       } else {
-        if (!profile) {
-          alert("Data profil pegawai belum siap. Silakan muat ulang halaman.");
-          return;
-        }
-
         const data = {
           employeeId: auth.currentUser!.uid,
-          employeeName: profile.name || 'Pegawai',
-          branchId: profile.branchId || 'HQ-01',
-          shiftId: profile.currentShiftId || 'default',
+          employeeName: profile?.name || 'Pegawai',
+          branchId: profile?.branchId || 'HQ-01',
+          shiftId: profile?.currentShiftId || 'default',
           date: todayStr,
           workDate: todayStr,
           checkInTime: null,
@@ -335,7 +379,7 @@ export default function EmployeeDashboard() {
         const docRef = await addDoc(collection(db, 'attendance'), data);
         const newAtt = { id: docRef.id, ...data };
         setTodayAttendance(newAtt);
-        setHistory(prev => [newAtt, ...prev].slice(0, 10));
+        setHistory(prev => [newAtt, ...prev]);
       }
 
       alert("✓ Berhasil Absen Keluar!");
@@ -372,11 +416,23 @@ export default function EmployeeDashboard() {
       alert('✓ Pengajuan berhasil dikirim! Menunggu persetujuan admin.');
       setShowRequestModal(false);
       setRequestForm({ type: 'Izin', startDate: '', endDate: '', reason: '' });
+      setActiveTab('requests');
     } catch (e: any) {
       alert("Gagal mengirim pengajuan:\n" + formatErrorMessage(e));
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const openNewRequestModal = (initialType = 'Izin') => {
+    const today = new Date().toISOString().split('T')[0];
+    setRequestForm({
+      type: initialType,
+      startDate: today,
+      endDate: today,
+      reason: ''
+    });
+    setShowRequestModal(true);
   };
 
   const fmtTime = (val: any) => {
@@ -440,313 +496,671 @@ export default function EmployeeDashboard() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm text-gray-500">Memuat data pegawai...</p>
+        <p className="text-sm text-gray-500">Memuat portal pegawai...</p>
       </div>
     </div>
   );
 
+  const pendingRequestsCount = myRequests.filter(r => (r.status || '').toUpperCase() === 'PENDING').length;
+
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
-      {/* Header — identik dengan screenshot */}
-      <header className="bg-white shadow-sm sticky top-0 z-20">
-        <div className="flex items-center justify-between px-4 h-14">
+    <div className="min-h-screen bg-gray-100 flex flex-col justify-between">
+      {/* ──── Top Header ──── */}
+      <header className="bg-white shadow-sm sticky top-0 z-30">
+        <div className="max-w-lg mx-auto flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-2.5">
             <img src="/logo.png" alt="Logo" className="h-8 w-8 object-contain" />
-            <span className="text-base font-bold text-gray-900">Portal Pegawai</span>
+            <div>
+              <span className="text-base font-bold text-gray-900 leading-none">Portal Pegawai</span>
+              <span className="block text-[10px] text-gray-400 mt-0.5">Klinik Al-Miftah</span>
+            </div>
           </div>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-1.5 text-sm font-medium text-red-500 active:opacity-70"
+            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-3.5 w-3.5" />
             Keluar
           </button>
         </div>
       </header>
 
-      {/* Content — padding kecil, max-width seperti mobile */}
-      <main className="flex-1 w-full max-w-lg mx-auto px-3 py-4 space-y-3">
+      {/* ──── Content Area (Scrollable with Bottom Bar Padding) ──── */}
+      <main className="flex-1 w-full max-w-lg mx-auto px-3 py-4 space-y-3 pb-24">
 
-        {/* ──── Kartu Profil ──── */}
-        <div className="bg-white rounded-2xl p-4 flex items-center gap-4 shadow-sm">
-          <div className="h-14 w-14 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-            <User className="h-7 w-7 text-primary" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-base font-bold text-gray-900 leading-tight truncate">
-              {profile?.name || 'Pegawai'}
-            </h2>
-            <p className="text-sm text-gray-500 mt-0.5 truncate">
-              {profile?.role || '-'} • {profile?.phone || '-'}
-            </p>
-          </div>
-        </div>
-
-        {/* ──── Status Kehadiran ──── */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3.5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-gray-800">Status Kehadiran Hari Ini</h3>
-              <p className="text-xs text-gray-400 mt-0.5">{todayLabel}</p>
+        {/* ══════════════════════════════════════════════════════════════
+            TAB 1: BERANDA (Home / Kehadiran Hari Ini)
+           ══════════════════════════════════════════════════════════════ */}
+        {activeTab === 'home' && (
+          <div className="space-y-3 animate-in fade-in duration-200">
+            {/* Kartu Profil Singkat */}
+            <div className="bg-white rounded-2xl p-4 flex items-center gap-4 shadow-sm border border-gray-100">
+              <div className="h-14 w-14 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                <User className="h-7 w-7 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-base font-bold text-gray-900 leading-tight truncate">
+                  {profile?.name || 'Pegawai'}
+                </h2>
+                <p className="text-sm text-gray-500 mt-0.5 truncate">
+                  {profile?.role || 'Staff'} • {profile?.phone || '-'}
+                </p>
+                {branchLocation && (
+                  <p className="text-xs text-orange-600 font-medium flex items-center gap-1 mt-1">
+                    <MapPin className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">{branchLocation.name || 'Cabang Terdaftar'}</span>
+                  </p>
+                )}
+              </div>
             </div>
-            {isCheckedOut && (
-              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                Selesai Kerja ✓
-              </span>
-            )}
-          </div>
 
-          {/* Kartu Jam Absensi */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className={`p-3 rounded-xl border ${checkInDisplay ? 'bg-green-50/70 border-green-200' : 'bg-gray-50 border-gray-100'}`}>
+            {/* Status Kehadiran Hari Ini */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-gray-500">Masuk</span>
-                {checkInDisplay && <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />}
+                <div>
+                  <h3 className="text-sm font-bold text-gray-800">Status Kehadiran Hari Ini</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">{todayLabel}</p>
+                </div>
+                {isCheckedOut && (
+                  <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    Selesai Kerja ✓
+                  </span>
+                )}
               </div>
-              <div className={`text-base font-bold mt-1 ${checkInDisplay ? 'text-green-700' : 'text-gray-400'}`}>
-                {fmtTime(checkInDisplay)}
+
+              {/* Kartu Jam Absensi */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className={`p-3 rounded-xl border ${checkInDisplay ? 'bg-green-50/70 border-green-200' : 'bg-gray-50 border-gray-100'}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-gray-500">Masuk</span>
+                    {checkInDisplay && <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />}
+                  </div>
+                  <div className={`text-base font-bold mt-1 ${checkInDisplay ? 'text-green-700' : 'text-gray-400'}`}>
+                    {fmtTime(checkInDisplay)}
+                  </div>
+                </div>
+
+                <div className={`p-3 rounded-xl border ${checkOutDisplay ? 'bg-blue-50/70 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-gray-500">Keluar</span>
+                    {checkOutDisplay && <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />}
+                  </div>
+                  <div className={`text-base font-bold mt-1 ${checkOutDisplay ? 'text-blue-700' : 'text-gray-400'}`}>
+                    {fmtTime(checkOutDisplay)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tombol Absen: Absen Masuk & Absen Keluar */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <button
+                  onClick={handleAbsenMasuk}
+                  disabled={actionLoading || isCheckedIn || !profile}
+                  className={`flex items-center justify-center gap-2 py-3.5 px-3 rounded-xl font-bold text-sm transition-all ${
+                    isCheckedIn
+                      ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-75'
+                      : !profile
+                      ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-75'
+                      : 'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-sm active:scale-[0.98]'
+                  }`}
+                >
+                  <Fingerprint className="w-5 h-5 flex-shrink-0" />
+                  <span>{isCheckedIn ? 'Sudah Masuk' : 'Absen Masuk'}</span>
+                </button>
+
+                <button
+                  onClick={handleAbsenKeluar}
+                  disabled={actionLoading || isCheckedOut || (!isCheckedIn && !profile)}
+                  className={`flex items-center justify-center gap-2 py-3.5 px-3 rounded-xl font-bold text-sm transition-all ${
+                    isCheckedOut
+                      ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-75'
+                      : isCheckedIn
+                      ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-md shadow-blue-500/20 active:scale-[0.98]'
+                      : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-sm active:scale-[0.98]'
+                  }`}
+                >
+                  <LogOut className="w-5 h-5 flex-shrink-0" />
+                  <span>{isCheckedOut ? 'Sudah Keluar' : 'Absen Keluar'}</span>
+                </button>
               </div>
             </div>
 
-            <div className={`p-3 rounded-xl border ${checkOutDisplay ? 'bg-blue-50/70 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-gray-500">Keluar</span>
-                {checkOutDisplay && <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />}
-              </div>
-              <div className={`text-base font-bold mt-1 ${checkOutDisplay ? 'text-blue-700' : 'text-gray-400'}`}>
-                {fmtTime(checkOutDisplay)}
-              </div>
-            </div>
-          </div>
-
-          {/* Tombol Absen: Absen Masuk & Absen Keluar */}
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            {/* Tombol Absen Masuk */}
-            <button
-              onClick={handleAbsenMasuk}
-              disabled={actionLoading || isCheckedIn || !profile}
-              className={`flex items-center justify-center gap-2 py-3.5 px-3 rounded-xl font-bold text-sm transition-all ${
-                isCheckedIn
-                  ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-75'
-                  : !profile
-                  ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-75'
-                  : 'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-sm active:scale-[0.98]'
-              }`}
-            >
-              <Fingerprint className="w-5 h-5 flex-shrink-0" />
-              <span>{isCheckedIn ? 'Sudah Masuk' : 'Absen Masuk'}</span>
-            </button>
-
-            {/* Tombol Absen Keluar */}
-            <button
-              onClick={handleAbsenKeluar}
-              disabled={actionLoading || isCheckedOut || (!isCheckedIn && !profile)}
-              className={`flex items-center justify-center gap-2 py-3.5 px-3 rounded-xl font-bold text-sm transition-all ${
-                isCheckedOut
-                  ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-75'
-                  : isCheckedIn
-                  ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-md shadow-blue-500/20 active:scale-[0.98]'
-                  : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-sm active:scale-[0.98]'
-              }`}
-            >
-              <LogOut className="w-5 h-5 flex-shrink-0" />
-              <span>{isCheckedOut ? 'Sudah Keluar' : 'Absen Keluar'}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* ──── Riwayat & Pengajuan ──── */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          {/* Header riwayat */}
-          <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100">
-            <h3 className="text-sm font-bold text-gray-800">Riwayat Absensi Terakhir</h3>
-            <button
-              onClick={() => setShowRequestModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              Buat Pengajuan
-            </button>
-          </div>
-
-          {/* List */}
-          {history.length === 0 ? (
-            <div className="py-10 text-center text-sm text-gray-400">
-              Belum ada riwayat absensi.
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {history.map(item => {
-                const inTime = item.checkInTime || item.checkIn?.timestamp || item.createdAt;
-                const outTime = item.checkOutTime || item.checkOut?.timestamp || item.updatedAt;
-                const recDate = item.date || item.workDate || item.checkInTime || (item.createdAt?.toDate ? item.createdAt.toDate().toISOString() : null);
-
-                return (
-                  <div key={item.id} className="px-4 py-3 flex items-start justify-between gap-3">
-                    {/* Kiri: tanggal & lokasi */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 mb-1">
-                        <Calendar className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                        <span className="truncate">{fmtDate(recDate)}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                        <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                        <span className="truncate">{item.locationName || 'Lokasi tidak diketahui'}</span>
-                      </div>
-                      {/* Badge status */}
-                      <span className={`inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full ${getStatusBadge(item)}`}>
-                        {getStatusText(item.status)}
+            {/* Error Lokasi */}
+            {locationError && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-red-700">Absensi Ditolak — Di Luar Area</p>
+                  <p className="text-xs text-red-600 mt-0.5 leading-relaxed">{locationError.message}</p>
+                  {branchLocation && locationError.distance != null && (
+                    <div className="flex items-center gap-1.5 mt-2 text-xs text-red-500">
+                      <Navigation className="h-3.5 w-3.5" />
+                      <span>
+                        Jarak Anda: <strong>{locationError.distance >= 1000 ? `${(locationError.distance / 1000).toFixed(1)} km` : `${locationError.distance} m`}</strong>
+                        {' '}· Radius diizinkan: <strong>{branchLocation.radius} m</strong>
                       </span>
                     </div>
+                  )}
+                </div>
+              </div>
+            )}
 
-                    {/* Kanan: jam masuk & pulang */}
-                    <div className="flex gap-2 flex-shrink-0">
-                      <div className="text-center bg-green-50 rounded-lg px-3 py-1.5 border border-green-100">
-                        <div className="text-[10px] text-green-600 font-medium">Masuk</div>
-                        <div className="text-xs font-bold text-green-700">{fmtTime(inTime)}</div>
+            {/* Riwayat Terakhir & Tombol Lihat Semua */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100">
+                <h3 className="text-sm font-bold text-gray-800">Riwayat Terakhir</h3>
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className="text-xs font-semibold text-primary hover:text-orange-700 flex items-center gap-0.5"
+                >
+                  Lihat Semua
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {history.slice(0, 3).length === 0 ? (
+                <div className="py-8 text-center text-xs text-gray-400">
+                  Belum ada catatan kehadiran.
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {history.slice(0, 3).map(item => {
+                    const inTime = item.checkInTime || item.checkIn?.timestamp || item.createdAt;
+                    const outTime = item.checkOutTime || item.checkOut?.timestamp || item.updatedAt;
+                    const recDate = item.date || item.workDate || item.checkInTime || (item.createdAt?.toDate ? item.createdAt.toDate().toISOString() : null);
+
+                    return (
+                      <div key={item.id} className="px-4 py-3 flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 mb-1">
+                            <Calendar className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{fmtDate(recDate)}</span>
+                          </div>
+                          <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${getStatusBadge(item)}`}>
+                            {getStatusText(item.status)}
+                          </span>
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <div className="text-center bg-green-50 rounded-lg px-2.5 py-1 border border-green-100">
+                            <div className="text-[9px] text-green-600 font-medium">Masuk</div>
+                            <div className="text-xs font-bold text-green-700">{fmtTime(inTime)}</div>
+                          </div>
+                          <div className="text-center bg-blue-50 rounded-lg px-2.5 py-1 border border-blue-100">
+                            <div className="text-[9px] text-blue-600 font-medium">Keluar</div>
+                            <div className="text-xs font-bold text-blue-700">
+                              {outTime && (item.checkOutTime || item.checkOut) ? fmtTime(outTime) : '-'}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-center bg-blue-50 rounded-lg px-3 py-1.5 border border-blue-100">
-                        <div className="text-[10px] text-blue-600 font-medium">Keluar</div>
-                        <div className="text-xs font-bold text-blue-700">
-                          {outTime && (item.checkOutTime || item.checkOut) ? fmtTime(outTime) : '-'}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Quick Card Buat Pengajuan */}
+            <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+              <div>
+                <p className="text-sm font-bold text-orange-900">Perlu Izin atau Cuti?</p>
+                <p className="text-xs text-orange-700 mt-0.5">Kirim permohonan resmi langsung ke pimpinan.</p>
+              </div>
+              <button
+                onClick={() => openNewRequestModal('Izin')}
+                className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1 flex-shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                Ajukan
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════
+            TAB 2: RIWAYAT (History Lengkap)
+           ══════════════════════════════════════════════════════════════ */}
+        {activeTab === 'history' && (
+          <div className="space-y-3 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+              <h2 className="text-base font-bold text-gray-900">Riwayat Kehadiran</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Daftar lengkap catatan absensi masuk dan keluar Anda.</p>
+
+              {/* Stat Ringkas */}
+              <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-gray-100">
+                <div className="bg-green-50 p-2.5 rounded-xl border border-green-100">
+                  <p className="text-xs text-green-700 font-medium">Total Absensi</p>
+                  <p className="text-lg font-bold text-green-800">{history.length} Hari</p>
+                </div>
+                <div className="bg-yellow-50 p-2.5 rounded-xl border border-yellow-100">
+                  <p className="text-xs text-yellow-700 font-medium">Terlambat</p>
+                  <p className="text-lg font-bold text-yellow-800">
+                    {history.filter(h => getStatusText(h.status) === 'Terlambat').length} Kali
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* List Riwayat */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-100">
+              {history.length === 0 ? (
+                <div className="py-12 text-center text-sm text-gray-400">
+                  Belum ada catatan riwayat absensi.
+                </div>
+              ) : (
+                history.map(item => {
+                  const inTime = item.checkInTime || item.checkIn?.timestamp || item.createdAt;
+                  const outTime = item.checkOutTime || item.checkOut?.timestamp || item.updatedAt;
+                  const recDate = item.date || item.workDate || item.checkInTime || (item.createdAt?.toDate ? item.createdAt.toDate().toISOString() : null);
+
+                  return (
+                    <div key={item.id} className="p-4 flex items-start justify-between gap-3 hover:bg-gray-50 transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 mb-1">
+                          <Calendar className="h-4 w-4 text-primary flex-shrink-0" />
+                          <span>{fmtDate(recDate)}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
+                          <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                          <span className="truncate">{item.locationName || branchLocation?.name || 'Klinik Al-Miftah'}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${getStatusBadge(item)}`}>
+                            {getStatusText(item.status)}
+                          </span>
+                          {item.lateMinutes > 0 && (
+                            <span className="text-[10px] text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded-full font-medium">
+                              Terlambat {item.lateMinutes} menit
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 flex-shrink-0">
+                        <div className="text-center bg-green-50 rounded-xl px-3 py-2 border border-green-100">
+                          <div className="text-[10px] text-green-600 font-semibold">Masuk</div>
+                          <div className="text-xs font-bold text-green-700">{fmtTime(inTime)}</div>
+                        </div>
+                        <div className="text-center bg-blue-50 rounded-xl px-3 py-2 border border-blue-100">
+                          <div className="text-[10px] text-blue-600 font-semibold">Keluar</div>
+                          <div className="text-xs font-bold text-blue-700">
+                            {outTime && (item.checkOutTime || item.checkOut) ? fmtTime(outTime) : '-'}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* ──── Error Lokasi ──── */}
-        {locationError && (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3">
-            <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-red-700">Absensi Ditolak — Di Luar Area</p>
-              <p className="text-xs text-red-600 mt-0.5 leading-relaxed">{locationError.message}</p>
-              {branchLocation && locationError.distance != null && (
-                <div className="flex items-center gap-1.5 mt-2 text-xs text-red-500">
-                  <Navigation className="h-3.5 w-3.5" />
-                  <span>
-                    Jarak Anda: <strong>{locationError.distance >= 1000 ? `${(locationError.distance / 1000).toFixed(1)} km` : `${locationError.distance} m`}</strong>
-                    {' '}· Radius diizinkan: <strong>{branchLocation.radius} m</strong>
-                  </span>
+        {/* ══════════════════════════════════════════════════════════════
+            TAB 3: PENGAJUAN (Requests / Permohonan Izin & Cuti)
+           ══════════════════════════════════════════════════════════════ */}
+        {activeTab === 'requests' && (
+          <div className="space-y-3 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">Pengajuan & Izin</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Kirim dan pantau status permohonan Anda.</p>
+                </div>
+                <button
+                  onClick={() => openNewRequestModal('Izin')}
+                  className="px-3.5 py-2 bg-primary hover:bg-orange-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  Buat Baru
+                </button>
+              </div>
+
+              {/* Quick Action Grid */}
+              <div className="grid grid-cols-4 gap-2 mt-4 pt-3 border-t border-gray-100">
+                {[
+                  { type: 'Izin', label: 'Izin', icon: Clock, color: 'text-blue-600 bg-blue-50' },
+                  { type: 'Sakit', label: 'Sakit', icon: AlertCircle, color: 'text-red-600 bg-red-50' },
+                  { type: 'Cuti', label: 'Cuti', icon: Calendar, color: 'text-emerald-600 bg-emerald-50' },
+                  { type: 'Dinas', label: 'Dinas', icon: Award, color: 'text-purple-600 bg-purple-50' },
+                ].map(item => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.type}
+                      onClick={() => openNewRequestModal(item.type)}
+                      className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-gray-100 hover:bg-gray-50 transition-all text-center"
+                    >
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-1 ${item.color}`}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <span className="text-[11px] font-semibold text-gray-700">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Riwayat Permohonan */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-800">Riwayat Pengajuan Anda</h3>
+                <span className="text-xs text-gray-400 font-medium">{myRequests.length} Data</span>
+              </div>
+
+              {myRequests.length === 0 ? (
+                <div className="py-12 text-center text-sm text-gray-400">
+                  Belum ada permohonan yang diajukan.
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {myRequests.map((req) => {
+                    const status = (req.status || 'PENDING').toUpperCase();
+                    const isPending = status === 'PENDING';
+                    const isApproved = status === 'APPROVED';
+
+                    return (
+                      <div key={req.id} className="p-4 space-y-2 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-sm text-gray-900">
+                            Pengajuan {req.type}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                            isPending
+                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                              : isApproved
+                              ? 'bg-green-100 text-green-800 border border-green-200'
+                              : 'bg-red-100 text-red-800 border border-red-200'
+                          }`}>
+                            {isPending ? 'Menunggu Review' : isApproved ? 'Disetujui ✓' : 'Ditolak ✕'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                          <span>
+                            {req.startDate === req.endDate || !req.endDate
+                              ? fmtDate(req.startDate)
+                              : `${fmtDate(req.startDate)} s/d ${fmtDate(req.endDate)}`}
+                          </span>
+                        </div>
+
+                        {req.reason && (
+                          <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded-lg border border-gray-100 leading-relaxed">
+                            {req.reason}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* ──── Footer ──── */}
-        <p className="text-center text-xs text-gray-400 py-2 px-4 leading-relaxed">
-          Aplikasi Android Klinik Al-Miftah tetap disarankan untuk pengalaman penuh (Anti Fake-GPS).
+        {/* ══════════════════════════════════════════════════════════════
+            TAB 4: PROFIL (Profil Lengkap & Pengaturan Akun)
+           ══════════════════════════════════════════════════════════════ */}
+        {activeTab === 'profile' && (
+          <div className="space-y-3 animate-in fade-in duration-200">
+            {/* Kartu Profil Besar */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-center">
+              <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <User className="h-10 w-10 text-primary" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">{profile?.name || 'Pegawai'}</h2>
+              <p className="text-xs text-gray-500 mt-0.5">{profile?.role || 'Staff Pegawai'}</p>
+              <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-50 border border-green-200 text-green-700 text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                Akun Aktif
+              </div>
+            </div>
+
+            {/* Informasi Detail */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Informasi Pegawai</h3>
+              </div>
+              <div className="divide-y divide-gray-100 text-sm">
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <span className="text-gray-500 flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-gray-400" /> No. Telepon
+                  </span>
+                  <span className="font-semibold text-gray-900">{profile?.phone || '-'}</span>
+                </div>
+
+                {profile?.strNumber && (
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    <span className="text-gray-500 flex items-center gap-2">
+                      <Award className="w-4 h-4 text-gray-400" /> No. STR
+                    </span>
+                    <span className="font-semibold text-gray-900">{profile.strNumber}</span>
+                  </div>
+                )}
+
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <span className="text-gray-500 flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-gray-400" /> Cabang Penempatan
+                  </span>
+                  <span className="font-semibold text-gray-900">{branchLocation?.name || profile?.branchId || '-'}</span>
+                </div>
+
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <span className="text-gray-500 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-gray-400" /> Jadwal Shift
+                  </span>
+                  <span className="font-semibold text-gray-900">
+                    {shiftInfo ? `${shiftInfo.name} (${shiftInfo.startTime} - ${shiftInfo.endTime})` : 'Default'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Informasi Sistem & Perangkat */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sistem & Keamanan</h3>
+              </div>
+              <div className="divide-y divide-gray-100 text-sm">
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <span className="text-gray-500">Platform Absensi</span>
+                  <span className="font-semibold text-gray-900">Web Browser Portal</span>
+                </div>
+                <div className="px-4 py-3 flex items-center justify-between">
+                  <span className="text-gray-500">Validasi Geofence</span>
+                  <span className="font-semibold text-green-600">Aktif ({branchLocation?.radius || 50} meter)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Tombol Keluar Akun */}
+            <button
+              onClick={handleLogout}
+              className="w-full py-3.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.99]"
+            >
+              <LogOut className="w-4 h-4" />
+              Keluar dari Akun
+            </button>
+          </div>
+        )}
+
+        {/* ──── Footer Catatan ──── */}
+        <p className="text-center text-[11px] text-gray-400 py-3 px-4 leading-relaxed">
+          Sistem Absensi Pegawai Klinik Al-Miftah • Versi Web Mobile
         </p>
       </main>
 
-      {/* ──── Modal Pengajuan ──── Bottom-sheet style di mobile ──── */}
+      {/* ══════════════════════════════════════════════════════════════
+          BOTTOM NAVIGATION BAR (Fixed at the bottom of the screen)
+         ══════════════════════════════════════════════════════════════ */}
+      <nav className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-gray-200 z-40 max-w-lg mx-auto shadow-lg">
+        <div className="grid grid-cols-4 h-16">
+          {/* Tab 1: Beranda */}
+          <button
+            onClick={() => setActiveTab('home')}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors relative ${
+              activeTab === 'home' ? 'text-primary font-bold' : 'text-gray-400 hover:text-gray-600 font-medium'
+            }`}
+          >
+            <Home className="w-5 h-5" />
+            <span className="text-[11px]">Beranda</span>
+            {activeTab === 'home' && (
+              <span className="absolute top-0 inset-x-4 h-0.5 bg-primary rounded-full" />
+            )}
+          </button>
+
+          {/* Tab 2: Riwayat */}
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors relative ${
+              activeTab === 'history' ? 'text-primary font-bold' : 'text-gray-400 hover:text-gray-600 font-medium'
+            }`}
+          >
+            <Calendar className="w-5 h-5" />
+            <span className="text-[11px]">Riwayat</span>
+            {activeTab === 'history' && (
+              <span className="absolute top-0 inset-x-4 h-0.5 bg-primary rounded-full" />
+            )}
+          </button>
+
+          {/* Tab 3: Pengajuan */}
+          <button
+            onClick={() => setActiveTab('requests')}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors relative ${
+              activeTab === 'requests' ? 'text-primary font-bold' : 'text-gray-400 hover:text-gray-600 font-medium'
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            <span className="text-[11px]">Pengajuan</span>
+            {pendingRequestsCount > 0 && (
+              <span className="absolute top-2 right-6 w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+            )}
+            {activeTab === 'requests' && (
+              <span className="absolute top-0 inset-x-4 h-0.5 bg-primary rounded-full" />
+            )}
+          </button>
+
+          {/* Tab 4: Profil */}
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors relative ${
+              activeTab === 'profile' ? 'text-primary font-bold' : 'text-gray-400 hover:text-gray-600 font-medium'
+            }`}
+          >
+            <User className="w-5 h-5" />
+            <span className="text-[11px]">Profil</span>
+            {activeTab === 'profile' && (
+              <span className="absolute top-0 inset-x-4 h-0.5 bg-primary rounded-full" />
+            )}
+          </button>
+        </div>
+      </nav>
+
+      {/* ══════════════════════════════════════════════════════════════
+          MODAL / BOTTOM SHEET PENGAJUAN
+         ══════════════════════════════════════════════════════════════ */}
       {showRequestModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setShowRequestModal(false)}
           />
 
-          {/* Sheet */}
-          <div className="relative w-full max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl z-10 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-300">
-            {/* Handle bar (mobile) */}
+          <div className="relative w-full max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl z-10 animate-in slide-in-from-bottom-4 duration-300">
             <div className="sm:hidden flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full bg-gray-300" />
+              <div className="w-10 h-1 bg-gray-300 rounded-full" />
             </div>
 
-            {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h3 className="text-base font-bold text-gray-900">Buat Pengajuan</h3>
+              <div>
+                <h3 className="font-bold text-gray-900 text-base">Buat Pengajuan</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Izin, sakit, cuti, atau dinas luar</p>
+              </div>
               <button
                 onClick={() => setShowRequestModal(false)}
-                className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 transition-colors"
+                className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors"
               >
-                <X className="h-5 w-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmitRequest} className="px-5 py-4 space-y-4">
-              {/* Jenis */}
+            <form onSubmit={handleSubmitRequest} className="p-5 space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Jenis Pengajuan</label>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">
+                  Jenis Pengajuan
+                </label>
                 <div className="grid grid-cols-4 gap-2">
                   {['Izin', 'Sakit', 'Cuti', 'Dinas'].map(t => (
                     <button
                       key={t}
                       type="button"
-                      onClick={() => setRequestForm({ ...requestForm, type: t })}
-                      className={`py-2.5 rounded-xl text-sm font-semibold transition-colors border ${
+                      onClick={() => setRequestForm(p => ({ ...p, type: t }))}
+                      className={`py-2 text-xs font-bold rounded-xl border transition-all ${
                         requestForm.type === t
-                          ? 'bg-primary text-white border-primary'
-                          : 'bg-white text-gray-600 border-gray-200 hover:border-primary/50'
+                          ? 'bg-primary text-white border-primary shadow-sm'
+                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
                       }`}
                     >
-                      {t === 'Dinas' ? 'Dinas' : t}
+                      {t}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Tanggal */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Tanggal Mulai</label>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">
+                    Tanggal Mulai
+                  </label>
                   <input
                     type="date"
                     required
                     value={requestForm.startDate}
-                    onChange={e => setRequestForm({ ...requestForm, startDate: e.target.value })}
-                    className="block w-full border border-gray-200 rounded-xl py-2.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50"
+                    onChange={e => setRequestForm(p => ({ ...p, startDate: e.target.value }))}
+                    className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Tanggal Selesai</label>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">
+                    Tanggal Selesai
+                  </label>
                   <input
                     type="date"
-                    required
                     value={requestForm.endDate}
-                    onChange={e => setRequestForm({ ...requestForm, endDate: e.target.value })}
-                    className="block w-full border border-gray-200 rounded-xl py-2.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50"
+                    onChange={e => setRequestForm(p => ({ ...p, endDate: e.target.value }))}
+                    className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   />
                 </div>
               </div>
 
-              {/* Alasan */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Alasan</label>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">
+                  Alasan / Keterangan
+                </label>
                 <textarea
-                  required
                   rows={3}
+                  required
+                  placeholder="Tuliskan alasan pengajuan Anda secara jelas..."
                   value={requestForm.reason}
-                  onChange={e => setRequestForm({ ...requestForm, reason: e.target.value })}
-                  className="block w-full border border-gray-200 rounded-xl py-2.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-gray-50 resize-none"
-                  placeholder="Tuliskan alasan pengajuan..."
+                  onChange={e => setRequestForm(p => ({ ...p, reason: e.target.value }))}
+                  className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
                 />
               </div>
 
-              {/* Actions */}
-              <div className="flex gap-2 pt-1 pb-safe">
+              <div className="pt-2 flex gap-3">
                 <button
                   type="button"
                   onClick={() => setShowRequestModal(false)}
-                  className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+                  className="flex-1 py-3 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="flex-1 py-3 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  className="flex-1 py-3 text-xs font-bold text-white bg-primary hover:bg-orange-700 rounded-xl shadow-sm transition-colors disabled:opacity-50"
                 >
-                  {actionLoading ? 'Menyimpan...' : 'Kirim Pengajuan'}
+                  {actionLoading ? 'Mengirim...' : 'Kirim Pengajuan'}
                 </button>
               </div>
             </form>

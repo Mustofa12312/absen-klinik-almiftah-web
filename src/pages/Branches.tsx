@@ -93,6 +93,18 @@ export default function Branches() {
     }
   };
 
+  const toggleBranchStatus = async (b: Branch) => {
+    const newStatus = b.status === 'active' ? 'inactive' : 'active';
+    const actionLabel = newStatus === 'inactive' ? 'menonaktifkan' : 'mengaktifkan';
+    if (!window.confirm(`Apakah Anda yakin ingin ${actionLabel} cabang "${b.name}"?`)) return;
+    try {
+      await AdminServices.updateBranch(b.id, { status: newStatus });
+      fetchBranches();
+    } catch (err) {
+      alert(`Gagal mengubah status cabang: ${formatErrorMessage(err)}`);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -174,7 +186,11 @@ export default function Branches() {
                       <button onClick={() => openEditModal(branch)} className="text-gray-400 hover:text-primary transition-colors" title="Edit">
                         <Edit2 className="h-4 w-4" />
                       </button>
-                      <button className="text-gray-400 hover:text-red-600 transition-colors" title="Nonaktifkan">
+                      <button 
+                        onClick={() => toggleBranchStatus(branch)} 
+                        className={`transition-colors ${branch.status === 'active' ? 'text-gray-400 hover:text-red-600' : 'text-green-500 hover:text-green-700'}`} 
+                        title={branch.status === 'active' ? 'Nonaktifkan Cabang' : 'Aktifkan Cabang'}
+                      >
                         <Ban className="h-4 w-4" />
                       </button>
                       <button className="text-gray-400 hover:text-gray-600 transition-colors">

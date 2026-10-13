@@ -1,7 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from './lib/firebase';
 import Dashboard from './pages/Dashboard';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import Login from './pages/Login';
@@ -15,8 +16,6 @@ function PrivateRoute({ children, requireAdmin = false }: { children: React.Reac
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       try {
         if (currentUser) {
-          const { doc, getDoc } = await import('firebase/firestore');
-          const { db } = await import('./lib/firebase');
           const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
           
           if (userDoc.exists() && userDoc.data()?.role === 'super_admin') {
