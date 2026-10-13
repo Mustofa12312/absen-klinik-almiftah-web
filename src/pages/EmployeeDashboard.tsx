@@ -205,7 +205,9 @@ export default function EmployeeDashboard() {
         distance: Math.round(distance),
       };
       setLocationError(error);
-      throw new Error(error.message);
+      const locErr: any = new Error(error.message);
+      locErr.isLocationError = true;
+      throw locErr;
     }
 
     return { lat, lng, distanceMeters: Math.round(distance) };
@@ -263,7 +265,7 @@ export default function EmployeeDashboard() {
       setHistory(prev => [newAtt, ...prev].slice(0, 10));
       alert("✓ Berhasil Absen Masuk!");
     } catch (e: any) {
-      if (!locationError) {
+      if (!e?.isLocationError) {
         alert("Gagal melakukan absen masuk:\n" + formatErrorMessage(e));
       }
     } finally {
@@ -341,7 +343,7 @@ export default function EmployeeDashboard() {
 
       alert("✓ Berhasil Absen Keluar!");
     } catch (e: any) {
-      if (!locationError) {
+      if (!e?.isLocationError) {
         alert("Gagal melakukan absen keluar:\n" + formatErrorMessage(e));
       }
     } finally {

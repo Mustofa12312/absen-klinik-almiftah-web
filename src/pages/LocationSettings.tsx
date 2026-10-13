@@ -19,10 +19,6 @@ export default function LocationSettings() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newLocation, setNewLocation] = useState({ name: '', code: '', latitude: '', longitude: '', radius: 100, maxAcc: 50 });
 
-  useEffect(() => {
-    fetchBranches();
-  }, []);
-
   const fetchBranches = async () => {
     try {
       const data = await AdminServices.getBranches();
@@ -33,6 +29,10 @@ export default function LocationSettings() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchBranches();
+  }, []);
 
   const filtered = branches.filter(b =>
     b.name.toLowerCase().includes(search.toLowerCase()) ||
