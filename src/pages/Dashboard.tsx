@@ -53,9 +53,9 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="h-screen w-screen bg-gray-50 flex overflow-hidden">
       {/* Sidebar Desktop */}
-      <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col z-10">
+      <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col flex-shrink-0 z-20 h-full">
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
             <img src="/logo.png" alt="Logo Klinik Al-Miftah" className="h-8 w-auto object-contain" />
@@ -149,9 +149,9 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Top Header */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 lg:px-8">
+        <header className="h-16 flex-shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 lg:px-8 z-10">
           <div className="flex items-center md:hidden">
             <button 
               className="text-gray-500 hover:text-gray-700 p-2 -ml-2"

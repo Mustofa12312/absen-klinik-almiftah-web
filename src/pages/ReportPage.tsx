@@ -406,22 +406,22 @@ export default function ReportPage() {
           </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50/80">
+        <div className="overflow-auto max-h-[600px] border-t border-gray-100">
+          <table className="min-w-full divide-y divide-gray-200 text-sm border-separate border-spacing-0">
+            <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
               <tr>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Pegawai</th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Cabang</th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Shift</th>
-                <th className="px-4 py-3.5 text-center text-xs font-bold text-green-800 uppercase tracking-wider whitespace-nowrap bg-green-50/60">Total Masuk</th>
-                <th className="px-4 py-3.5 text-center text-xs font-semibold text-emerald-700 uppercase tracking-wider whitespace-nowrap">Tepat Waktu</th>
-                <th className="px-4 py-3.5 text-center text-xs font-semibold text-yellow-700 uppercase tracking-wider whitespace-nowrap">Terlambat</th>
-                <th className="px-4 py-3.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Menit Tlt</th>
-                <th className="px-4 py-3.5 text-center text-xs font-semibold text-amber-700 uppercase tracking-wider whitespace-nowrap">Plg Cepat</th>
-                <th className="px-4 py-3.5 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider whitespace-nowrap">Izin</th>
-                <th className="px-4 py-3.5 text-center text-xs font-semibold text-purple-700 uppercase tracking-wider whitespace-nowrap">Sakit</th>
-                <th className="px-4 py-3.5 text-center text-xs font-semibold text-indigo-700 uppercase tracking-wider whitespace-nowrap">Cuti</th>
-                <th className="px-4 py-3.5 text-center text-xs font-semibold text-orange-700 uppercase tracking-wider whitespace-nowrap">Dinas</th>
+                <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap sticky left-0 bg-gray-50 z-30 shadow-[1px_0_0_0_#e5e7eb]">Pegawai</th>
+                <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap bg-gray-50">Cabang</th>
+                <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap bg-gray-50">Shift</th>
+                <th className="px-4 py-3.5 text-center text-xs font-bold text-green-800 uppercase tracking-wider whitespace-nowrap bg-green-50/80">Total Masuk</th>
+                <th className="px-4 py-3.5 text-center text-xs font-semibold text-emerald-700 uppercase tracking-wider whitespace-nowrap bg-gray-50">Tepat Waktu</th>
+                <th className="px-4 py-3.5 text-center text-xs font-semibold text-yellow-700 uppercase tracking-wider whitespace-nowrap bg-gray-50">Terlambat</th>
+                <th className="px-4 py-3.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap bg-gray-50">Menit Tlt</th>
+                <th className="px-4 py-3.5 text-center text-xs font-semibold text-amber-700 uppercase tracking-wider whitespace-nowrap bg-gray-50">Plg Cepat</th>
+                <th className="px-4 py-3.5 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider whitespace-nowrap bg-gray-50">Izin</th>
+                <th className="px-4 py-3.5 text-center text-xs font-semibold text-purple-700 uppercase tracking-wider whitespace-nowrap bg-gray-50">Sakit</th>
+                <th className="px-4 py-3.5 text-center text-xs font-semibold text-indigo-700 uppercase tracking-wider whitespace-nowrap bg-gray-50">Cuti</th>
+                <th className="px-4 py-3.5 text-center text-xs font-semibold text-orange-700 uppercase tracking-wider whitespace-nowrap bg-gray-50">Dinas</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -438,8 +438,8 @@ export default function ReportPage() {
                   </td>
                 </tr>
               ) : filtered.map((row) => (
-                <tr key={row.name} className="hover:bg-gray-50/80 transition-colors">
-                  <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">
+                <tr key={row.name} className="hover:bg-gray-50/80 transition-colors group">
+                  <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap sticky left-0 bg-white group-hover:bg-gray-50 z-10 shadow-[1px_0_0_0_#e5e7eb]">
                     {row.name}
                   </td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">

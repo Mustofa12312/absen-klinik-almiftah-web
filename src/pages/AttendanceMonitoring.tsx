@@ -211,9 +211,9 @@ export default function AttendanceMonitoring() {
             <Filter className="h-4 w-4" /> Filter Cabang
           </button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[600px] border-t border-gray-100">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pegawai</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cabang & Shift</th>
