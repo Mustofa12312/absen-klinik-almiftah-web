@@ -29,6 +29,65 @@ interface BranchLocation {
   name?: string;
 }
 
+interface ShiftItem {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  tolerance: number;
+  crossesMidnight?: boolean;
+}
+
+function resolveActiveShift(shifts: ShiftItem[], assignedShiftId?: string): ShiftItem {
+  if (!shifts || shifts.length === 0) {
+    return { id: 'shift_pagi', name: 'Shift Pagi', startTime: '07:00', endTime: '14:00', tolerance: 15 };
+  }
+
+  // 1. Cek apakah ada assigned shift dari admin di profil pegawai
+  if (assignedShiftId) {
+    const found = shifts.find(
+      s => s.id === assignedShiftId || s.name.toLowerCase() === assignedShiftId.toLowerCase()
+    );
+    if (found) return found;
+  }
+
+  // 2. Deteksi otomatis berdasarkan waktu sekarang
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  for (const s of shifts) {
+    const [sH = 0, sM = 0] = (s.startTime || '08:00').split(':').map(Number);
+    const [eH = 0, eM = 0] = (s.endTime || '14:00').split(':').map(Number);
+    const startMins = sH * 60 + sM;
+    const endMins = eH * 60 + eM;
+    const windowStart = startMins - 60; // Boleh absen 1 jam sebelum shift dimulai
+
+    if (s.crossesMidnight || endMins < startMins) {
+      if (currentMinutes >= windowStart || currentMinutes < endMins) {
+        return s;
+      }
+    } else {
+      if (currentMinutes >= windowStart && currentMinutes <= endMins) {
+        return s;
+      }
+    }
+  }
+
+  // 3. Fallback: cari shift terdekat
+  let closest = shifts[0];
+  let minDiff = Infinity;
+  for (const s of shifts) {
+    const [sH = 0, sM = 0] = (s.startTime || '08:00').split(':').map(Number);
+    const startMins = sH * 60 + sM;
+    const diff = Math.abs(startMins - currentMinutes);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = s;
+    }
+  }
+  return closest;
+}
+
 export default function EmployeeDashboard() {
   const [profile, setProfile] = useState<any>(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -38,6 +97,8 @@ export default function EmployeeDashboard() {
   const [actionLoading, setActionLoading] = useState(false);
   const [branchLocation, setBranchLocation] = useState<BranchLocation | null>(null);
   const [shiftInfo, setShiftInfo] = useState<any>(null);
+  const [allShifts, setAllShifts] = useState<ShiftItem[]>([]);
+  const [selectedShift, setSelectedShift] = useState<ShiftItem | null>(null);
   const [locationError, setLocationError] = useState<{ message: string; distance?: number } | null>(null);
 
   // Bottom Navigation Tab State: 'home' | 'history' | 'requests' | 'profile'
@@ -106,17 +167,45 @@ export default function EmployeeDashboard() {
           }
         }
 
-        // Ambil data shift pegawai
-        const sId = empData.currentShiftId || empData.shiftId;
-        if (sId) {
-          try {
-            const shiftDoc = await getDoc(doc(db, 'shifts', sId));
-            if (shiftDoc.exists()) {
-              setShiftInfo(shiftDoc.data());
-            }
-          } catch (shiftErr) {
-            console.warn('Gagal memuat shift pegawai:', shiftErr);
-          }
+        // Ambil data shift dari Firestore yang dikonfigurasi admin
+        try {
+          const shiftsSnap = await getDocs(collection(db, 'shifts'));
+          const list: ShiftItem[] = [];
+          shiftsSnap.forEach(d => {
+            const s = d.data();
+            list.push({
+              id: d.id,
+              name: s.name || 'Shift',
+              startTime: s.startTime || '08:00',
+              endTime: s.endTime || '14:00',
+              tolerance: Number(s.tolerance ?? s.lateToleranceMinutes ?? 15),
+              crossesMidnight: !!s.crossesMidnight,
+            });
+          });
+
+          // Urutkan shift berdasarkan jam mulai
+          list.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+          // Default fallback shifts jika Firestore belum memiliki data shift
+          const defaultShifts: ShiftItem[] = [
+            { id: 'shift_pagi', name: 'Shift Pagi', startTime: '07:00', endTime: '14:00', tolerance: 15, crossesMidnight: false },
+            { id: 'shift_siang', name: 'Shift Siang', startTime: '14:00', endTime: '21:00', tolerance: 15, crossesMidnight: false },
+            { id: 'shift_malam', name: 'Shift Malam', startTime: '21:00', endTime: '07:00', tolerance: 15, crossesMidnight: true },
+          ];
+
+          const finalList = list.length > 0 ? list : defaultShifts;
+          setAllShifts(finalList);
+
+          const sId = empData.currentShiftId || empData.shiftId;
+          const active = resolveActiveShift(finalList, sId);
+          setSelectedShift(active);
+          setShiftInfo(active);
+        } catch (shiftErr) {
+          console.warn('Gagal memuat shifts dari admin:', shiftErr);
+          const fallback: ShiftItem = { id: 'shift_pagi', name: 'Shift Pagi', startTime: '07:00', endTime: '14:00', tolerance: 15 };
+          setAllShifts([fallback]);
+          setSelectedShift(fallback);
+          setShiftInfo(fallback);
         }
       } catch (err) {
         console.error(`Gagal memuat profil pegawai (percobaan ${attempt}):`, err);
@@ -161,6 +250,20 @@ export default function EmployeeDashboard() {
       const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const todayAtt = att.find((a: any) => (a.date === todayStr || a.workDate === todayStr));
       setTodayAttendance(todayAtt || null);
+
+      if (todayAtt && (todayAtt.shiftName || todayAtt.shiftId)) {
+        setSelectedShift(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            id: todayAtt.shiftId || prev.id,
+            name: todayAtt.shiftName || prev.name,
+            startTime: todayAtt.shiftStartTime || prev.startTime,
+            endTime: todayAtt.shiftEndTime || prev.endTime
+          };
+        });
+      }
+
       setLoading(false);
     }, (err) => {
       console.error('Gagal memuat riwayat absensi:', err);
@@ -261,14 +364,37 @@ export default function EmployeeDashboard() {
       const now = new Date();
       const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-      const hour = now.getHours();
-      const status = hour >= 8 ? 'Terlambat' : 'Hadir';
+      // Evaluasi keterlambatan berdasarkan jam shift dari admin
+      const activeShift = selectedShift || shiftInfo || {
+        id: 'shift_pagi',
+        name: 'Shift Pagi',
+        startTime: '07:00',
+        endTime: '14:00',
+        tolerance: 15,
+      };
+
+      const [sH = 0, sM = 0] = (activeShift.startTime || '07:00').split(':').map(Number);
+      const shiftStartMins = sH * 60 + sM;
+      const tolerance = Number(activeShift.tolerance ?? 15);
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+
+      let diff = nowMins - shiftStartMins;
+      if (activeShift.crossesMidnight && diff < -720) {
+        diff += 1440;
+      }
+
+      const isLate = diff > tolerance;
+      const lateMinutes = isLate ? Math.max(0, diff) : 0;
+      const status = isLate ? 'Terlambat' : 'Hadir';
 
       const data = {
         employeeId: auth.currentUser!.uid,
         employeeName: profile.name || 'Pegawai',
         branchId: profile.branchId || 'HQ-01',
-        shiftId: profile.currentShiftId || 'default',
+        shiftId: activeShift.id,
+        shiftName: activeShift.name,
+        shiftStartTime: activeShift.startTime,
+        shiftEndTime: activeShift.endTime,
         date: todayStr,
         workDate: todayStr,
         checkInTime: now.toISOString(),
@@ -288,7 +414,7 @@ export default function EmployeeDashboard() {
         locationName: branchLocation?.name || 'Web Browser',
         isFakeGps: false,
         status: status,
-        lateMinutes: hour >= 8 ? (hour - 8) * 60 + now.getMinutes() : 0,
+        lateMinutes: lateMinutes,
         earlyCheckoutMinutes: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -298,7 +424,7 @@ export default function EmployeeDashboard() {
       const newAtt = { id: docRef.id, ...data };
       setTodayAttendance(newAtt);
       setHistory(prev => [newAtt, ...prev]);
-      alert("✓ Berhasil Absen Masuk!");
+      alert(`✓ Berhasil Absen Masuk untuk ${activeShift.name}!`);
     } catch (e: any) {
       if (!e?.isLocationError) {
         alert("Gagal melakukan absen masuk:\n" + formatErrorMessage(e));
@@ -317,6 +443,14 @@ export default function EmployeeDashboard() {
       const now = new Date();
       const nowIso = now.toISOString();
       const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+      const activeShift = selectedShift || shiftInfo || {
+        id: 'shift_pagi',
+        name: 'Shift Pagi',
+        startTime: '07:00',
+        endTime: '14:00',
+        tolerance: 15,
+      };
 
       if (todayAttendance) {
         await updateDoc(doc(db, 'attendance', todayAttendance.id), {
@@ -351,7 +485,10 @@ export default function EmployeeDashboard() {
           employeeId: auth.currentUser!.uid,
           employeeName: profile?.name || 'Pegawai',
           branchId: profile?.branchId || 'HQ-01',
-          shiftId: profile?.currentShiftId || 'default',
+          shiftId: activeShift.id,
+          shiftName: activeShift.name,
+          shiftStartTime: activeShift.startTime,
+          shiftEndTime: activeShift.endTime,
           date: todayStr,
           workDate: todayStr,
           checkInTime: null,
@@ -545,12 +682,20 @@ export default function EmployeeDashboard() {
                 <p className="text-sm text-gray-500 mt-0.5 truncate">
                   {profile?.role || 'Staff'} • {profile?.phone || '-'}
                 </p>
-                {branchLocation && (
-                  <p className="text-xs text-orange-600 font-medium flex items-center gap-1 mt-1">
-                    <MapPin className="w-3 h-3 flex-shrink-0" />
-                    <span className="truncate">{branchLocation.name || 'Cabang Terdaftar'}</span>
-                  </p>
-                )}
+                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                  {branchLocation && (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md font-medium border border-orange-100">
+                      <MapPin className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">{branchLocation.name || 'Cabang Terdaftar'}</span>
+                    </span>
+                  )}
+                  {selectedShift && (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md font-medium border border-blue-100">
+                      <Clock className="w-3 h-3 flex-shrink-0 text-blue-600" />
+                      <span>{selectedShift.name} ({selectedShift.startTime} - {selectedShift.endTime})</span>
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -565,6 +710,65 @@ export default function EmployeeDashboard() {
                   <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                     Selesai Kerja ✓
                   </span>
+                )}
+              </div>
+
+              {/* Banner Info Shift dari Admin */}
+              <div className="bg-gradient-to-r from-orange-50/90 via-amber-50/60 to-white border border-orange-200/90 rounded-xl p-3 flex items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-gray-900 truncate">
+                        {todayAttendance?.shiftName || selectedShift?.name || 'Shift Pagi'}
+                      </span>
+                      {todayAttendance ? (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-green-100 text-green-700 font-semibold border border-green-200">
+                          Tercatat Absen
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-orange-100 text-primary font-semibold border border-orange-200">
+                          Shift Kerja Aktif
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-600 mt-0.5">
+                      Waktu Kerja:{' '}
+                      <strong className="text-gray-900">
+                        {todayAttendance?.shiftStartTime || selectedShift?.startTime || '07:00'} -{' '}
+                        {todayAttendance?.shiftEndTime || selectedShift?.endTime || '14:00'} WIB
+                      </strong>
+                      {(selectedShift?.tolerance || 0) > 0 && !todayAttendance && (
+                        <span className="text-gray-500"> • Toleransi {selectedShift?.tolerance} mnt</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Dropdown Ganti Shift jika admin memiliki > 1 shift dan belum absen masuk */}
+                {!todayAttendance && allShifts.length > 1 && (
+                  <div className="flex-shrink-0">
+                    <select
+                      value={selectedShift?.id || ''}
+                      onChange={(e) => {
+                        const s = allShifts.find(item => item.id === e.target.value);
+                        if (s) {
+                          setSelectedShift(s);
+                          setShiftInfo(s);
+                        }
+                      }}
+                      className="text-[11px] font-semibold bg-white border border-orange-200 text-gray-700 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
+                      title="Ganti Shift Kerja"
+                    >
+                      {allShifts.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.startTime} - {s.endTime})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 )}
               </div>
 
@@ -672,13 +876,20 @@ export default function EmployeeDashboard() {
                     return (
                       <div key={item.id} className="px-4 py-3 flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 mb-1">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 mb-1 flex-wrap">
                             <Calendar className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
                             <span className="truncate">{fmtDate(recDate)}</span>
                           </div>
-                          <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${getStatusBadge(item)}`}>
-                            {getStatusText(item.status)}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${getStatusBadge(item)}`}>
+                              {getStatusText(item.status)}
+                            </span>
+                            {(item.shiftName || item.shiftId) && (
+                              <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md font-medium border border-blue-100">
+                                {item.shiftName || item.shiftId}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="flex gap-2 flex-shrink-0">
                           <div className="text-center bg-green-50 rounded-lg px-2.5 py-1 border border-green-100">
@@ -755,9 +966,14 @@ export default function EmployeeDashboard() {
                   return (
                     <div key={item.id} className="p-4 flex items-start justify-between gap-3 hover:bg-gray-50 transition-colors">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 mb-1">
+                        <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 mb-1 flex-wrap">
                           <Calendar className="h-4 w-4 text-primary flex-shrink-0" />
                           <span>{fmtDate(recDate)}</span>
+                          {(item.shiftName || item.shiftId) && (
+                            <span className="text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md font-medium border border-blue-100">
+                              {item.shiftName || item.shiftId}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
                           <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
@@ -950,7 +1166,7 @@ export default function EmployeeDashboard() {
                     <Clock className="w-4 h-4 text-gray-400" /> Jadwal Shift
                   </span>
                   <span className="font-semibold text-gray-900">
-                    {shiftInfo ? `${shiftInfo.name} (${shiftInfo.startTime} - ${shiftInfo.endTime})` : 'Default'}
+                    {selectedShift ? `${selectedShift.name} (${selectedShift.startTime} - ${selectedShift.endTime} WIB)` : (shiftInfo ? `${shiftInfo.name} (${shiftInfo.startTime} - ${shiftInfo.endTime} WIB)` : 'Shift Pagi (07:00 - 14:00 WIB)')}
                   </span>
                 </div>
               </div>
