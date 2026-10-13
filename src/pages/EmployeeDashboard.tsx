@@ -1,9 +1,29 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { LogOut, User, Calendar, Fingerprint, CheckCircle2, FileText, X, MapPin } from 'lucide-react';
+import { LogOut, User, Calendar, Fingerprint, CheckCircle2, FileText, X, MapPin, AlertTriangle, Navigation } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { formatErrorMessage } from '../lib/errorUtils';
+
+/** Hitung jarak (meter) antara dua koordinat menggunakan formula Haversine */
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000; // radius bumi dalam meter
+  const toRad = (v: number) => (v * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+interface BranchLocation {
+  latitude: number;
+  longitude: number;
+  radius: number; // meter
+  name?: string;
+}
 
 export default function EmployeeDashboard() {
   const [profile, setProfile] = useState<any>(null);
@@ -12,6 +32,8 @@ export default function EmployeeDashboard() {
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [branchLocation, setBranchLocation] = useState<BranchLocation | null>(null);
+  const [locationError, setLocationError] = useState<{ message: string; distance?: number } | null>(null);
 
   // Request Modal State
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -57,6 +79,27 @@ export default function EmployeeDashboard() {
           }
         }
         setProfile(empData);
+
+        // Ambil data lokasi cabang dari Firestore
+        const bId = empData.branchId;
+        if (bId) {
+          try {
+            const branchDoc = await getDoc(doc(db, 'branches', bId));
+            if (branchDoc.exists()) {
+              const bd = branchDoc.data();
+              if (bd.latitude != null && bd.longitude != null && bd.radius != null) {
+                setBranchLocation({
+                  latitude: bd.latitude,
+                  longitude: bd.longitude,
+                  radius: bd.radius,
+                  name: bd.name,
+                });
+              }
+            }
+          } catch (branchErr) {
+            console.warn('Gagal memuat data lokasi cabang:', branchErr);
+          }
+        }
       } catch (err) {
         console.error(`Gagal memuat profil pegawai (percobaan ${attempt}):`, err);
         if (attempt < 3) {
@@ -118,26 +161,68 @@ export default function EmployeeDashboard() {
     }
   };
 
+  /** Ambil GPS saat ini — wajib berhasil, error jika tidak bisa */
+  const getCurrentPosition = (): Promise<GeolocationPosition> =>
+    new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        timeout: 15000,
+        enableHighAccuracy: true,
+        maximumAge: 0,
+      })
+    );
+
+  /** Validasi apakah pengguna berada di dalam radius cabang */
+  const validateLocation = async (): Promise<{ lat: number; lng: number; distanceMeters: number }> => {
+    setLocationError(null);
+
+    // Jika data lokasi cabang belum tersedia, izinkan tetapi log peringatan
+    if (!branchLocation) {
+      console.warn('Data lokasi cabang tidak tersedia — validasi dilewati');
+      return { lat: 0, lng: 0, distanceMeters: 0 };
+    }
+
+    let pos: GeolocationPosition;
+    try {
+      pos = await getCurrentPosition();
+    } catch (e: any) {
+      const msg = e.code === 1
+        ? 'Izin lokasi ditolak. Aktifkan izin lokasi di browser Anda.'
+        : e.code === 2
+        ? 'GPS tidak tersedia. Pastikan GPS aktif dan coba lagi.'
+        : 'Gagal mendapatkan lokasi. Pastikan GPS aktif.';
+      throw new Error(msg);
+    }
+
+    const { latitude: lat, longitude: lng } = pos.coords;
+    const distance = haversineDistance(lat, lng, branchLocation.latitude, branchLocation.longitude);
+
+    if (distance > branchLocation.radius) {
+      const distanceText = distance >= 1000
+        ? `${(distance / 1000).toFixed(1)} km`
+        : `${Math.round(distance)} m`;
+      const error = {
+        message: `Anda berada di luar area klinik (${distanceText} dari lokasi). Pastikan Anda sudah berada di tempat kerja.`,
+        distance: Math.round(distance),
+      };
+      setLocationError(error);
+      throw new Error(error.message);
+    }
+
+    return { lat, lng, distanceMeters: Math.round(distance) };
+  };
+
   const handleAbsenMasuk = async () => {
     if (!profile) {
       alert("Data profil pegawai belum siap. Silakan muat ulang halaman.");
       return;
     }
     setActionLoading(true);
+    setLocationError(null);
     try {
+      const { lat, lng, distanceMeters } = await validateLocation();
+
       const now = new Date();
       const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-      let lat = 0, lng = 0;
-      try {
-        const pos: any = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, enableHighAccuracy: true });
-        });
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-      } catch (e: any) {
-        console.warn('Geolocation tidak dapat diakses atau ditolak', e);
-      }
 
       const hour = now.getHours();
       const status = hour >= 8 ? 'Terlambat' : 'Hadir';
@@ -155,15 +240,15 @@ export default function EmployeeDashboard() {
           latitude: lat,
           longitude: lng,
           accuracy: 10,
-          distanceMeters: 0,
+          distanceMeters,
           deviceId: 'web-browser',
-          locationName: 'Web Browser'
+          locationName: branchLocation?.name || 'Web Browser',
         },
         checkOutTime: null,
         checkOut: null,
         locationLat: lat,
         locationLng: lng,
-        locationName: "Web Browser",
+        locationName: branchLocation?.name || 'Web Browser',
         isFakeGps: false,
         status: status,
         lateMinutes: hour >= 8 ? (hour - 8) * 60 + now.getMinutes() : 0,
@@ -178,7 +263,9 @@ export default function EmployeeDashboard() {
       setHistory(prev => [newAtt, ...prev].slice(0, 10));
       alert("✓ Berhasil Absen Masuk!");
     } catch (e: any) {
-      alert("Gagal melakukan absen masuk:\n" + formatErrorMessage(e));
+      if (!locationError) {
+        alert("Gagal melakukan absen masuk:\n" + formatErrorMessage(e));
+      }
     } finally {
       setActionLoading(false);
     }
@@ -186,21 +273,13 @@ export default function EmployeeDashboard() {
 
   const handleAbsenKeluar = async () => {
     setActionLoading(true);
+    setLocationError(null);
     try {
+      const { lat, lng, distanceMeters } = await validateLocation();
+
       const now = new Date();
       const nowIso = now.toISOString();
       const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-      let lat = 0, lng = 0;
-      try {
-        const pos: any = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, enableHighAccuracy: true });
-        });
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-      } catch (e) {
-        console.warn('Geolocation tidak dapat diakses', e);
-      }
 
       if (todayAttendance) {
         await updateDoc(doc(db, 'attendance', todayAttendance.id), {
@@ -210,6 +289,7 @@ export default function EmployeeDashboard() {
             latitude: lat,
             longitude: lng,
             accuracy: 10,
+            distanceMeters,
             deviceId: 'web-browser',
           },
           status: todayAttendance.status || 'Hadir',
@@ -239,11 +319,12 @@ export default function EmployeeDashboard() {
             latitude: lat,
             longitude: lng,
             accuracy: 10,
+            distanceMeters,
             deviceId: 'web-browser',
           },
           locationLat: lat,
           locationLng: lng,
-          locationName: "Web Browser",
+          locationName: branchLocation?.name || 'Web Browser',
           isFakeGps: false,
           status: 'Hadir',
           lateMinutes: 0,
@@ -260,7 +341,9 @@ export default function EmployeeDashboard() {
 
       alert("✓ Berhasil Absen Keluar!");
     } catch (e: any) {
-      alert("Gagal melakukan absen keluar:\n" + formatErrorMessage(e));
+      if (!locationError) {
+        alert("Gagal melakukan absen keluar:\n" + formatErrorMessage(e));
+      }
     } finally {
       setActionLoading(false);
     }
@@ -536,6 +619,26 @@ export default function EmployeeDashboard() {
             </div>
           )}
         </div>
+
+        {/* ──── Error Lokasi ──── */}
+        {locationError && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3">
+            <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-red-700">Absensi Ditolak — Di Luar Area</p>
+              <p className="text-xs text-red-600 mt-0.5 leading-relaxed">{locationError.message}</p>
+              {branchLocation && locationError.distance != null && (
+                <div className="flex items-center gap-1.5 mt-2 text-xs text-red-500">
+                  <Navigation className="h-3.5 w-3.5" />
+                  <span>
+                    Jarak Anda: <strong>{locationError.distance >= 1000 ? `${(locationError.distance / 1000).toFixed(1)} km` : `${locationError.distance} m`}</strong>
+                    {' '}· Radius diizinkan: <strong>{branchLocation.radius} m</strong>
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ──── Footer ──── */}
         <p className="text-center text-xs text-gray-400 py-2 px-4 leading-relaxed">
