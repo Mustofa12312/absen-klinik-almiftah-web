@@ -7,6 +7,7 @@ import { formatErrorMessage } from '../lib/errorUtils';
 
 export default function EmployeeDashboard() {
   const [profile, setProfile] = useState<any>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [history, setHistory] = useState<any[]>([]);
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -32,8 +33,9 @@ export default function EmployeeDashboard() {
       return;
     }
 
-    // 1. Ambil Profil Pegawai
-    const fetchProfile = async () => {
+    // 1. Ambil Profil Pegawai — dengan retry otomatis
+    const fetchProfile = async (attempt = 1): Promise<void> => {
+      setProfileLoading(true);
       try {
         let empData: any = null;
         const empDoc = await getDoc(doc(db, 'employees', user.uid));
@@ -45,6 +47,7 @@ export default function EmployeeDashboard() {
           if (!empSnap.empty) {
             empData = empSnap.docs[0].data();
           } else {
+            // Fallback dari data auth
             empData = {
               name: user.displayName || user.email?.split('@')[0] || 'Pegawai',
               role: 'Pegawai',
@@ -55,7 +58,21 @@ export default function EmployeeDashboard() {
         }
         setProfile(empData);
       } catch (err) {
-        console.error('Gagal memuat profil pegawai:', err);
+        console.error(`Gagal memuat profil pegawai (percobaan ${attempt}):`, err);
+        if (attempt < 3) {
+          // Retry dengan delay: 1s, 2s
+          await new Promise(r => setTimeout(r, attempt * 1000));
+          return fetchProfile(attempt + 1);
+        }
+        // Setelah 3x gagal, tetap buat fallback agar UI tidak buntu
+        setProfile({
+          name: user.displayName || user.email?.split('@')[0] || 'Pegawai',
+          role: 'Pegawai',
+          phone: user.phoneNumber || user.email || '-',
+          branchId: 'HQ-01'
+        });
+      } finally {
+        setProfileLoading(false);
       }
     };
     fetchProfile();
@@ -335,7 +352,9 @@ export default function EmployeeDashboard() {
   const checkInDisplay = todayAttendance ? (todayAttendance.checkInTime || todayAttendance.checkIn?.timestamp) : null;
   const checkOutDisplay = todayAttendance ? (todayAttendance.checkOutTime || todayAttendance.checkOut?.timestamp) : null;
 
-  if (loading) return (
+  const isReady = !loading && !profileLoading;
+
+  if (!isReady) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -423,9 +442,11 @@ export default function EmployeeDashboard() {
             {/* Tombol Absen Masuk */}
             <button
               onClick={handleAbsenMasuk}
-              disabled={actionLoading || isCheckedIn}
+              disabled={actionLoading || isCheckedIn || !profile}
               className={`flex items-center justify-center gap-2 py-3.5 px-3 rounded-xl font-bold text-sm transition-all ${
                 isCheckedIn
+                  ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-75'
+                  : !profile
                   ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-75'
                   : 'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white shadow-sm active:scale-[0.98]'
               }`}
@@ -437,7 +458,7 @@ export default function EmployeeDashboard() {
             {/* Tombol Absen Keluar */}
             <button
               onClick={handleAbsenKeluar}
-              disabled={actionLoading || isCheckedOut}
+              disabled={actionLoading || isCheckedOut || (!isCheckedIn && !profile)}
               className={`flex items-center justify-center gap-2 py-3.5 px-3 rounded-xl font-bold text-sm transition-all ${
                 isCheckedOut
                   ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-75'
