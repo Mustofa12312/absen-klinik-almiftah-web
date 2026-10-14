@@ -385,7 +385,7 @@ export default function EmployeeDashboard() {
 
       const isLate = diff > tolerance;
       const lateMinutes = isLate ? Math.max(0, diff) : 0;
-      const status = isLate ? 'Terlambat' : 'Hadir';
+      const status = isLate ? 'late' : 'present';
 
       const data = {
         employeeId: auth.currentUser!.uid,

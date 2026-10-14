@@ -93,9 +93,25 @@ export default function AttendanceMonitoring() {
             checkOutStr = date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
           }
 
-          let status = d.status || 'present';
-          // Hanya override ke 'late' jika record ini adalah attendance biasa (bukan leave)
-          if (status === 'present' && (d.lateMinutes > 0)) status = 'late';
+          const rawStatus = (d.status || 'present').toString().toLowerCase();
+          let status: AttendanceRecord['status'] = 'present';
+          if (rawStatus === 'late' || rawStatus === 'terlambat' || (d.lateMinutes && d.lateMinutes > 0)) {
+            status = 'late';
+          } else if (rawStatus === 'early_checkout' || rawStatus === 'pulang cepat') {
+            status = 'early_checkout';
+          } else if (rawStatus === 'absent' || rawStatus === 'tidak hadir') {
+            status = 'absent';
+          } else if (rawStatus === 'permission' || rawStatus === 'izin') {
+            status = 'permission';
+          } else if (rawStatus === 'sick' || rawStatus === 'sakit') {
+            status = 'sick';
+          } else if (rawStatus === 'leave' || rawStatus === 'cuti') {
+            status = 'leave';
+          } else if (rawStatus === 'business_trip' || rawStatus === 'dinas') {
+            status = 'business_trip';
+          } else {
+            status = 'present';
+          }
           
           const bId = d.branchId || emp.branchId || '-';
           data.push({
@@ -268,7 +284,7 @@ export default function AttendanceMonitoring() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={6} className="px-6 py-12 text-center text-sm text-gray-400">Tidak ada data absensi untuk tanggal ini.</td></tr>
               ) : filtered.map((rec) => {
-                const statusCfg = STATUS_CONFIG[rec.status];
+                const statusCfg = STATUS_CONFIG[rec.status] || STATUS_CONFIG.present;
                 return (
                   <tr key={rec.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
