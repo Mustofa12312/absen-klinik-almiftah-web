@@ -3,7 +3,7 @@ import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import { 
+import {
   LayoutDashboard, Users, MapPin, Clock, Calendar, ShieldAlert,
   LogOut, Building2, FileCheck2, Menu, Smartphone, ClipboardList,
   Activity, AlertCircle, CheckCircle2, UserX, Stethoscope, BarChart2, X
@@ -38,18 +38,18 @@ export default function Dashboard() {
   };
 
   const navItems = [
-    { name: 'Ringkasan',           icon: LayoutDashboard, path: '/dashboard' },
-    { name: 'Monitoring Absensi',  icon: Activity,        path: '/dashboard/attendance' },
-    { name: 'Manajemen Cabang',    icon: Building2,       path: '/dashboard/branches' },
-    { name: 'Pegawai',             icon: Users,           path: '/dashboard/employees' },
-    { name: 'Lokasi Absensi',      icon: MapPin,          path: '/dashboard/locations' },
-    { name: 'Jadwal Shift',        icon: Clock,           path: '/dashboard/shifts' },
-    { name: 'Hari Libur',          icon: Calendar,        path: '/dashboard/holidays' },
-    { name: 'Pengajuan & Koreksi', icon: FileCheck2,      path: '/dashboard/requests' },
-    { name: 'Rekap & Laporan',     icon: BarChart2,       path: '/dashboard/reports' },
-    { name: 'Device Management',   icon: Smartphone,      path: '/dashboard/devices' },
-    { name: 'Security Events',     icon: ShieldAlert,     path: '/dashboard/security' },
-    { name: 'Audit Log',           icon: ClipboardList,   path: '/dashboard/audit' },
+    { name: 'Ringkasan', icon: LayoutDashboard, path: '/dashboard' },
+    { name: 'Monitoring Absensi', icon: Activity, path: '/dashboard/attendance' },
+    { name: 'Manajemen Cabang', icon: Building2, path: '/dashboard/branches' },
+    { name: 'Pegawai', icon: Users, path: '/dashboard/employees' },
+    { name: 'Lokasi Absensi', icon: MapPin, path: '/dashboard/locations' },
+    { name: 'Jadwal Shift', icon: Clock, path: '/dashboard/shifts' },
+    { name: 'Hari Libur', icon: Calendar, path: '/dashboard/holidays' },
+    { name: 'Pengajuan & Koreksi', icon: FileCheck2, path: '/dashboard/requests' },
+    { name: 'Rekap & Laporan', icon: BarChart2, path: '/dashboard/reports' },
+    { name: 'Device Management', icon: Smartphone, path: '/dashboard/devices' },
+    { name: 'Security Events', icon: ShieldAlert, path: '/dashboard/security' },
+    { name: 'Audit Log', icon: ClipboardList, path: '/dashboard/audit' },
   ];
 
   return (
@@ -71,11 +71,10 @@ export default function Dashboard() {
               <Link
                 key={item.name}
                 to={item.path}
-                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive 
-                    ? 'bg-primary/10 text-primary' 
+                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive
+                    ? 'bg-primary/10 text-primary'
                     : 'text-gray-700 hover:bg-gray-100'
-                }`}
+                  }`}
               >
                 <Icon className={`mr-3 flex-shrink-0 h-5 w-5 ${isActive ? 'text-primary' : 'text-gray-400'}`} />
                 {item.name}
@@ -85,7 +84,7 @@ export default function Dashboard() {
         </nav>
 
         <div className="p-4 border-t border-gray-200">
-          <button 
+          <button
             onClick={handleLogout}
             className="flex items-center w-full px-3 py-2 text-sm font-medium text-red-600 rounded-lg hover:bg-red-50 transition-colors"
           >
@@ -97,8 +96,8 @@ export default function Dashboard() {
 
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-20 md:hidden" 
+        <div
+          className="fixed inset-0 bg-black/50 z-20 md:hidden"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
@@ -124,11 +123,10 @@ export default function Dashboard() {
                 key={item.name}
                 to={item.path}
                 onClick={() => setIsSidebarOpen(false)}
-                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive 
-                    ? 'bg-primary/10 text-primary' 
+                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive
+                    ? 'bg-primary/10 text-primary'
                     : 'text-gray-700 hover:bg-gray-100'
-                }`}
+                  }`}
               >
                 <Icon className={`mr-3 flex-shrink-0 h-5 w-5 ${isActive ? 'text-primary' : 'text-gray-400'}`} />
                 {item.name}
@@ -138,7 +136,7 @@ export default function Dashboard() {
         </nav>
 
         <div className="p-4 border-t border-gray-200">
-          <button 
+          <button
             onClick={handleLogout}
             className="flex items-center w-full px-3 py-2 text-sm font-medium text-red-600 rounded-lg hover:bg-red-50 transition-colors"
           >
@@ -153,7 +151,7 @@ export default function Dashboard() {
         {/* Top Header */}
         <header className="h-16 flex-shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 lg:px-8 z-10">
           <div className="flex items-center md:hidden">
-            <button 
+            <button
               className="text-gray-500 hover:text-gray-700 p-2 -ml-2"
               onClick={() => setIsSidebarOpen(true)}
             >
@@ -170,7 +168,7 @@ export default function Dashboard() {
                 />
                 <span className="text-sm font-medium text-gray-700 hidden sm:inline">Super Admin</span>
               </div>
-              <button 
+              <button
                 onClick={handleLogout}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors active:scale-95"
                 title="Keluar dari akun"
@@ -185,18 +183,18 @@ export default function Dashboard() {
         {/* Page Content */}
         <div className="flex-1 overflow-y-auto bg-gray-50/50 p-4 sm:p-6 pb-20 md:pb-6">
           <Routes>
-            <Route path="/"           element={<Overview />} />
+            <Route path="/" element={<Overview />} />
             <Route path="/attendance" element={<AttendanceMonitoring />} />
-            <Route path="/branches"   element={<Branches />} />
-            <Route path="/employees"  element={<Employees />} />
-            <Route path="/locations"  element={<LocationSettings />} />
-            <Route path="/shifts"     element={<Shifts />} />
-            <Route path="/holidays"   element={<Holidays />} />
-            <Route path="/requests"   element={<Requests />} />
-            <Route path="/reports"    element={<ReportPage />} />
-            <Route path="/devices"    element={<DeviceManagement />} />
-            <Route path="/security"   element={<SecurityEvents />} />
-            <Route path="/audit"      element={<AuditLog />} />
+            <Route path="/branches" element={<Branches />} />
+            <Route path="/employees" element={<Employees />} />
+            <Route path="/locations" element={<LocationSettings />} />
+            <Route path="/shifts" element={<Shifts />} />
+            <Route path="/holidays" element={<Holidays />} />
+            <Route path="/requests" element={<Requests />} />
+            <Route path="/reports" element={<ReportPage />} />
+            <Route path="/devices" element={<DeviceManagement />} />
+            <Route path="/security" element={<SecurityEvents />} />
+            <Route path="/audit" element={<AuditLog />} />
           </Routes>
         </div>
 
@@ -205,9 +203,8 @@ export default function Dashboard() {
           <div className="grid grid-cols-5 h-16">
             <Link
               to="/dashboard"
-              className={`flex flex-col items-center justify-center gap-1 transition-colors ${
-                location.pathname === '/dashboard' ? 'text-primary font-bold' : 'text-gray-400 font-medium'
-              }`}
+              className={`flex flex-col items-center justify-center gap-1 transition-colors ${location.pathname === '/dashboard' ? 'text-primary font-bold' : 'text-gray-400 font-medium'
+                }`}
             >
               <LayoutDashboard className="w-5 h-5" />
               <span className="text-[10px]">Ringkasan</span>
@@ -215,9 +212,8 @@ export default function Dashboard() {
 
             <Link
               to="/dashboard/attendance"
-              className={`flex flex-col items-center justify-center gap-1 transition-colors ${
-                location.pathname.startsWith('/dashboard/attendance') ? 'text-primary font-bold' : 'text-gray-400 font-medium'
-              }`}
+              className={`flex flex-col items-center justify-center gap-1 transition-colors ${location.pathname.startsWith('/dashboard/attendance') ? 'text-primary font-bold' : 'text-gray-400 font-medium'
+                }`}
             >
               <Activity className="w-5 h-5" />
               <span className="text-[10px]">Monitoring</span>
@@ -225,9 +221,8 @@ export default function Dashboard() {
 
             <Link
               to="/dashboard/employees"
-              className={`flex flex-col items-center justify-center gap-1 transition-colors ${
-                location.pathname.startsWith('/dashboard/employees') ? 'text-primary font-bold' : 'text-gray-400 font-medium'
-              }`}
+              className={`flex flex-col items-center justify-center gap-1 transition-colors ${location.pathname.startsWith('/dashboard/employees') ? 'text-primary font-bold' : 'text-gray-400 font-medium'
+                }`}
             >
               <Users className="w-5 h-5" />
               <span className="text-[10px]">Pegawai</span>
@@ -235,9 +230,8 @@ export default function Dashboard() {
 
             <Link
               to="/dashboard/reports"
-              className={`flex flex-col items-center justify-center gap-1 transition-colors ${
-                location.pathname.startsWith('/dashboard/reports') ? 'text-primary font-bold' : 'text-gray-400 font-medium'
-              }`}
+              className={`flex flex-col items-center justify-center gap-1 transition-colors ${location.pathname.startsWith('/dashboard/reports') ? 'text-primary font-bold' : 'text-gray-400 font-medium'
+                }`}
             >
               <BarChart2 className="w-5 h-5" />
               <span className="text-[10px]">Laporan</span>
@@ -276,7 +270,7 @@ function Overview() {
   });
   const [branches, setBranches] = useState<{ id: string; name: string; code: string }[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
-  
+
   const [todayLabel] = useState(() => new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
 
   useEffect(() => {
@@ -290,15 +284,15 @@ function Overview() {
     const fetchData = async () => {
       try {
         const now = new Date();
-        const todayStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
-        
+        const todayStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+
         // 1. Employees — filter migrated docs + deduplikasi legacy
         const empSnap = await getDocs(collection(db, 'employees'));
         const allEmpDocs = empSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         // Buang dokumen migrated
         const nonMigrated = allEmpDocs.filter((d: any) => !d.migrated);
         // Pisahkan auth UID (≥28 chars) vs legacy auto-ID (<28 chars)
-        const authEmpDocs   = nonMigrated.filter((d: any) => d.id.length >= 28);
+        const authEmpDocs = nonMigrated.filter((d: any) => d.id.length >= 28);
         const legacyEmpDocs = nonMigrated.filter((d: any) => d.id.length < 28);
         // Buat set key unik dari auth docs
         const authEmpKeys = new Set<string>();
@@ -435,17 +429,17 @@ function Overview() {
   }, [selectedBranch]);
 
   const stats = [
-    { title: 'Total Pegawai',    value: data.totalEmployees,  subtitle: 'Terdaftar',                 icon: Users,         color: 'text-blue-600',   bg: 'bg-blue-50' },
-    { title: 'Hadir Hari Ini',   value: data.totalPresent,  subtitle: 'Sudah absen masuk',            icon: CheckCircle2,  color: 'text-green-600',  bg: 'bg-green-50' },
-    { title: 'Terlambat',        value: data.late,   subtitle: 'Melebihi toleransi shift',       icon: Clock,         color: 'text-yellow-600', bg: 'bg-yellow-50' },
-    { title: 'Belum Absen',      value: data.notCheckedIn,   subtitle: 'Perlu dipantau',                 icon: AlertCircle,   color: 'text-orange-600', bg: 'bg-orange-50' },
-    { title: 'Izin',             value: data.izin,   subtitle: 'Disetujui hari ini',             icon: FileCheck2,    color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { title: 'Sakit',            value: data.sakit,   subtitle: 'Dengan surat dokter',            icon: Stethoscope,   color: 'text-purple-600', bg: 'bg-purple-50' },
-    { title: 'Cuti',             value: data.cuti,   subtitle: 'Periode berjalan',               icon: Calendar,      color: 'text-sky-600',    bg: 'bg-sky-50' },
-    { title: 'Dinas',            value: data.dinas,   subtitle: 'Tugas luar klinik',              icon: MapPin,        color: 'text-teal-600',   bg: 'bg-teal-50' },
-    { title: 'Pegawai Nonaktif', value: data.inactive,   subtitle: 'Tidak perlu diabsenkan',         icon: UserX,         color: 'text-gray-500',   bg: 'bg-gray-100' },
-    { title: 'Security Events',  value: data.securityEvents,   subtitle: 'Fake GPS terdeteksi',            icon: ShieldAlert,   color: 'text-red-600',    bg: 'bg-red-50',   warning: true },
-    { title: 'Koreksi Pending',  value: data.pending,   subtitle: 'Menunggu persetujuan admin',     icon: ClipboardList, color: 'text-amber-600',  bg: 'bg-amber-50', warning: true },
+    { title: 'Total Pegawai', value: data.totalEmployees, subtitle: 'Terdaftar', icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { title: 'Hadir Hari Ini', value: data.totalPresent, subtitle: 'Sudah absen masuk', icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50' },
+    { title: 'Terlambat', value: data.late, subtitle: 'Melebihi toleransi shift', icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50' },
+    { title: 'Belum Absen', value: data.notCheckedIn, subtitle: 'Perlu dipantau', icon: AlertCircle, color: 'text-orange-600', bg: 'bg-orange-50' },
+    { title: 'Izin', value: data.izin, subtitle: 'Disetujui hari ini', icon: FileCheck2, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { title: 'Sakit', value: data.sakit, subtitle: 'Dengan surat dokter', icon: Stethoscope, color: 'text-purple-600', bg: 'bg-purple-50' },
+    { title: 'Cuti', value: data.cuti, subtitle: 'Periode berjalan', icon: Calendar, color: 'text-sky-600', bg: 'bg-sky-50' },
+    { title: 'Dinas', value: data.dinas, subtitle: 'Tugas luar klinik', icon: MapPin, color: 'text-teal-600', bg: 'bg-teal-50' },
+    { title: 'Pegawai Nonaktif', value: data.inactive, subtitle: 'Tidak perlu diabsenkan', icon: UserX, color: 'text-gray-500', bg: 'bg-gray-100' },
+    { title: 'Security Events', value: data.securityEvents, subtitle: 'Fake GPS terdeteksi', icon: ShieldAlert, color: 'text-red-600', bg: 'bg-red-50', warning: true },
+    { title: 'Koreksi Pending', value: data.pending, subtitle: 'Menunggu persetujuan admin', icon: ClipboardList, color: 'text-amber-600', bg: 'bg-amber-50', warning: true },
   ];
 
   return (
