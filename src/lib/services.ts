@@ -1,6 +1,6 @@
-import { collection, getDocs, doc, updateDoc, addDoc, writeBatch, query, where, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, addDoc, writeBatch, query, where, setDoc, deleteDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { db, secondaryAuth } from './firebase';
+import { auth, db, secondaryAuth } from './firebase';
 
 // Interfaces
 export interface Branch {
@@ -344,6 +344,26 @@ export const AdminServices = {
         deviceId: null,
         deviceName: null
       });
+
+      // Nonaktifkan juga perangkat di koleksi devices agar pegawai bisa register HP baru (BR-08)
+      try {
+        const devQuery = query(collection(db, 'devices'), where('employeeId', '==', employeeId));
+        const devSnap = await getDocs(devQuery);
+        const batch = writeBatch(db);
+        devSnap.forEach(d => {
+          batch.update(d.ref, { isActive: false });
+        });
+        await batch.commit();
+      } catch (devErr) {
+        console.warn("Gagal menonaktifkan koleksi devices:", devErr);
+      }
+
+      await AdminServices.logAuditAction(
+        'reset_device',
+        'employee',
+        employeeId,
+        `Reset device binding pegawai ID ${employeeId}`
+      );
     } catch (error) {
       console.error("Gagal mereset perangkat:", error);
       throw error;
@@ -355,10 +375,75 @@ export const AdminServices = {
     try {
       const collectionName = type === 'Koreksi' ? 'correction_requests' : 'leave_requests';
       const reqRef = doc(db, collectionName, requestId);
-      await updateDoc(reqRef, { status });
+      
+      const reqSnap = await getDoc(reqRef);
+      const reqData = reqSnap.exists() ? reqSnap.data() : null;
+
+      const currentUid = auth.currentUser?.uid || 'admin';
+      await updateDoc(reqRef, { 
+        status,
+        reviewedBy: currentUid,
+        reviewedAt: serverTimestamp(),
+      });
+
+      // Jika koreksi absensi disetujui, sinkronisasikan perbaikan ke koleksi attendance (BR-21)
+      if (type === 'Koreksi' && status === 'APPROVED' && reqData) {
+        try {
+          const attId = reqData.attendanceId;
+          if (attId && attId !== 'att_unknown') {
+            const attRef = doc(db, 'attendance', attId);
+            const attDoc = await getDoc(attRef);
+            if (attDoc.exists()) {
+              const payload: any = {
+                status: 'present',
+                lateMinutes: 0,
+                updatedAt: serverTimestamp(),
+                correctionStatus: 'approved',
+              };
+              if (reqData.requestedCheckIn) {
+                payload['checkIn.correctedTime'] = reqData.requestedCheckIn;
+              }
+              if (reqData.requestedCheckOut) {
+                payload['checkOut.correctedTime'] = reqData.requestedCheckOut;
+              }
+              await updateDoc(attRef, payload);
+            }
+          }
+        } catch (syncErr) {
+          console.warn("Gagal sinkronisasi koreksi ke dokumen attendance:", syncErr);
+        }
+      }
+
+      await AdminServices.logAuditAction(
+        status === 'APPROVED' ? (type === 'Koreksi' ? 'approve_correction' : 'approve_leave') : (type === 'Koreksi' ? 'reject_correction' : 'reject_leave'),
+        type === 'Koreksi' ? 'correction_request' : 'leave_request',
+        requestId,
+        `${status === 'APPROVED' ? 'Menyetujui' : 'Menolak'} pengajuan ${type} (ID: ${requestId})`
+      );
     } catch (error) {
       console.error("Gagal update status pengajuan:", error);
       throw error;
+    }
+  },
+
+  // --- AUDIT LOGS ---
+  async logAuditAction(action: string, targetType: string, targetId: string, description: string, before?: any, after?: any): Promise<void> {
+    try {
+      const currentUser = auth.currentUser;
+      await addDoc(collection(db, 'audit_logs'), {
+        actorUid: currentUser?.uid || 'system',
+        actorName: currentUser?.displayName || currentUser?.email || 'Super Admin',
+        actorRole: 'super_admin',
+        action,
+        targetType,
+        targetId,
+        description,
+        before: before || null,
+        after: after || null,
+        createdAt: serverTimestamp(),
+      });
+    } catch (e) {
+      console.warn("Audit log creation skipped or error:", e);
     }
   },
 
@@ -397,19 +482,27 @@ export const AdminServices = {
 
 // --- HOLIDAYS ---
 export const HolidayServices = {
-  async addHoliday(data: { date: string; name: string; description: string; scope: string }): Promise<void> {
+  async addHoliday(data: { date: string; name: string; description: string; scope: string; branchId?: string }): Promise<void> {
     try {
-      await addDoc(collection(db, 'holidays'), { ...data, isActive: true });
+      await addDoc(collection(db, 'holidays'), { ...data, isActive: true, createdAt: serverTimestamp() });
     } catch (error) {
       console.error("Gagal menambah hari libur:", error);
       throw error;
     }
   },
-  async updateHoliday(id: string, data: Partial<{ date: string; name: string; description: string; scope: string; isActive: boolean }>): Promise<void> {
+  async updateHoliday(id: string, data: Partial<{ date: string; name: string; description: string; scope: string; branchId?: string; isActive: boolean }>): Promise<void> {
     try {
-      await updateDoc(doc(db, 'holidays', id), data);
+      await updateDoc(doc(db, 'holidays', id), { ...data, updatedAt: serverTimestamp() });
     } catch (error) {
       console.error("Gagal update hari libur:", error);
+      throw error;
+    }
+  },
+  async deleteHoliday(id: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'holidays', id));
+    } catch (error) {
+      console.error("Gagal menghapus hari libur:", error);
       throw error;
     }
   },

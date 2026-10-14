@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ShieldAlert, Search, AlertTriangle, MapPin, Cpu, Fingerprint, RefreshCw, Download } from 'lucide-react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 interface SecurityEvent {
@@ -40,17 +40,13 @@ export default function SecurityEvents() {
           empMap[doc.id] = doc.data();
         });
 
-        const snap = await getDocs(query(collection(db, 'security_events'), orderBy('timestamp', 'desc')));
+        const snap = await getDocs(collection(db, 'security_events'));
         const data: SecurityEvent[] = [];
         snap.forEach(doc => {
           const d = doc.data();
           let empId = d.employeeId;
           let branchId = d.branchId || '-';
           let empName = d.employeeName;
-          
-          if (d.deviceId) {
-            // we could try to look up device to find employee, but let's assume it's logged with employeeId
-          }
           
           const emp = empMap[empId] || {};
           
@@ -71,6 +67,7 @@ export default function SecurityEvents() {
             createdAt,
           });
         });
+        data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setEvents(data);
       } catch (e) {
         console.error(e);

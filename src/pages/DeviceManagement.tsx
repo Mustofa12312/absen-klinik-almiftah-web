@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Smartphone, Search, RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { AdminServices } from '../lib/services';
 import { formatErrorMessage } from '../lib/errorUtils';
 
 interface Device {
@@ -71,10 +72,22 @@ export default function DeviceManagement() {
     fetchDevices();
   }, []);
 
-  const handleReset = async (empName: string, id: string) => {
+  const handleReset = async (empName: string, id: string, employeeId?: string) => {
     if (window.confirm(`Reset device binding untuk ${empName}? Pegawai perlu mendaftar ulang perangkat.`)) {
       try {
         await updateDoc(doc(db, 'devices', id), { isActive: false });
+        if (employeeId && employeeId !== '-') {
+          try {
+            await updateDoc(doc(db, 'employees', employeeId), {
+              deviceBound: false,
+              deviceId: null,
+              deviceName: null,
+            });
+          } catch (empErr) {
+            console.warn('Could not reset employee doc:', empErr);
+          }
+        }
+        await AdminServices.logAuditAction('reset_device', 'device', id, `Reset perangkat ${empName} (ID: ${id})`);
         setDevices(prev => prev.map(d => d.id === id ? { ...d, isActive: false } : d));
       } catch (e) {
         console.error('Failed to reset device', e);
@@ -163,7 +176,7 @@ export default function DeviceManagement() {
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     {dev.isActive && (
                       <button
-                        onClick={() => handleReset(dev.employeeName, dev.id)}
+                        onClick={() => handleReset(dev.employeeName, dev.id, dev.employeeId)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors"
                         title="Reset Device Binding"
                       >

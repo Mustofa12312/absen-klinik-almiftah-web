@@ -309,10 +309,15 @@ function Overview() {
           })
         ];
 
+        // Filter per cabang jika selectedBranch dipilih
+        const scopedEmpDocs = selectedBranch
+          ? uniqueEmpDocs.filter((d: any) => d.branchId === selectedBranch)
+          : uniqueEmpDocs;
+
         let totalActive = 0;
         let inactive = 0;
         const activeEmployeeIds = new Set<string>();
-        uniqueEmpDocs.forEach((d: any) => {
+        scopedEmpDocs.forEach((d: any) => {
           if (d.status === 'inactive') {
             inactive++;
           } else {

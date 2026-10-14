@@ -92,8 +92,8 @@ export default function LocationSettings() {
   };
 
   const handlePasteCoordinates = (text: string, isEdit: boolean) => {
-    // Regex for latitude, longitude e.g. "-6.2088, 106.8456" or from maps url
-    const coordMatch = text.match(/(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)/);
+    // Regex for latitude, longitude e.g. "-6.2088, 106.8456" or from maps url (@-6.2088,106.8456 or ?q=-6.2088,106.8456)
+    const coordMatch = text.match(/@?(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)/);
     if (coordMatch) {
       if (isEdit) {
         setEditLat(coordMatch[1]);
@@ -203,10 +203,10 @@ export default function LocationSettings() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex flex-col gap-2">
                         <div className="text-xs font-mono text-gray-700 bg-gray-50 rounded px-2 py-1 border inline-block w-max">
-                          <div>Lat: {loc.latitude ? loc.latitude.toFixed(6) : "Belum diset"}</div>
-                          <div>Lng: {loc.longitude ? loc.longitude.toFixed(6) : "Belum diset"}</div>
+                          <div>Lat: {loc.latitude != null && !isNaN(loc.latitude) ? loc.latitude.toFixed(6) : "Belum diset"}</div>
+                          <div>Lng: {loc.longitude != null && !isNaN(loc.longitude) ? loc.longitude.toFixed(6) : "Belum diset"}</div>
                         </div>
-                        {loc.latitude && loc.longitude && (
+                        {loc.latitude != null && loc.longitude != null && !isNaN(loc.latitude) && !isNaN(loc.longitude) && (
                           <a 
                             href={`https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`}
                             target="_blank"

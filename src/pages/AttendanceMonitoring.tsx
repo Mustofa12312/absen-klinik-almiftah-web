@@ -8,6 +8,7 @@ interface AttendanceRecord {
   employeeName: string;
   employeeId: string;
   branchId: string;
+  branchName: string;
   shiftName: string;
   workDate: string;
   checkInTime?: string;
@@ -30,9 +31,11 @@ const STATUS_CONFIG: Record<AttendanceRecord['status'], { label: string; color: 
 
 export default function AttendanceMonitoring() {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string; code?: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('');
+  const [filterBranch, setFilterBranch] = useState<string>('');
   
   const [filterDate, setFilterDate] = useState(() => {
     const today = new Date();
@@ -43,6 +46,25 @@ export default function AttendanceMonitoring() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // Fetch branches for mapping and filter
+        const branchSnap = await getDocs(collection(db, 'branches'));
+        const bList: { id: string; name: string; code?: string }[] = [];
+        const bMap: Record<string, string> = {};
+        branchSnap.forEach(d => {
+          const bd = d.data();
+          const name = bd.name || bd.code || d.id;
+          bList.push({ id: d.id, name, code: bd.code });
+          bMap[d.id] = name;
+        });
+        setBranches(bList);
+
+        // Fetch shifts for mapping
+        const shiftSnap = await getDocs(collection(db, 'shifts'));
+        const sMap: Record<string, string> = {};
+        shiftSnap.forEach(d => {
+          sMap[d.id] = d.data().name || `Shift ${d.id}`;
+        });
+
         // Fetch all employees to map IDs to Names
         const empSnap = await getDocs(collection(db, 'employees'));
         const empMap: Record<string, any> = {};
@@ -75,12 +97,14 @@ export default function AttendanceMonitoring() {
           // Hanya override ke 'late' jika record ini adalah attendance biasa (bukan leave)
           if (status === 'present' && (d.lateMinutes > 0)) status = 'late';
           
+          const bId = d.branchId || emp.branchId || '-';
           data.push({
             id: doc.id,
             employeeName: emp.name || d.employeeName || 'Unknown Employee',
             employeeId: emp.employeeId || d.employeeId || '-',
-            branchId: d.branchId || '-',
-            shiftName: d.shiftId || 'Shift Default',
+            branchId: bId,
+            branchName: bMap[bId] || bId,
+            shiftName: sMap[d.shiftId] || d.shiftName || d.shiftId || 'Shift Default',
             workDate: d.workDate,
             checkInTime: checkInStr,
             checkOutTime: checkOutStr,
@@ -102,18 +126,19 @@ export default function AttendanceMonitoring() {
              // check if not already in attendance
              if (!data.find(a => a.employeeId === d.employeeId)) {
                 const emp = empMap[d.employeeId] || {};
-                // type dari Flutter: 'permission'|'sick'|'leave'|'business_trip'
                 let status: AttendanceRecord['status'] = 'permission';
                 const t = (d.type || '').toLowerCase();
                 if (t === 'sick' || t === 'sakit') status = 'sick';
                 else if (t === 'leave' || t === 'cuti') status = 'leave';
                 else if (t === 'business_trip' || t === 'dinas') status = 'business_trip';
                 
+                const bId = d.branchId || emp.branchId || '-';
                 data.push({
                   id: doc.id,
                   employeeName: d.employeeName || emp.name || 'Unknown Employee',
                   employeeId: d.employeeId || emp.employeeId || '-',
-                  branchId: emp.branchId || '-',
+                  branchId: bId,
+                  branchName: bMap[bId] || bId,
                   shiftName: '-',
                   workDate: filterDate,
                   status: status,
@@ -136,15 +161,17 @@ export default function AttendanceMonitoring() {
   const filtered = records.filter(r => {
     const matchSearch = r.employeeName.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus ? r.status === filterStatus : true;
-    return matchSearch && matchStatus;
+    const matchBranch = filterBranch ? r.branchId === filterBranch : true;
+    return matchSearch && matchStatus && matchBranch;
   });
 
   const exportCSV = () => {
-    const headers = ['Pegawai', 'ID Pegawai', 'Cabang', 'Shift', 'Tanggal', 'Masuk', 'Pulang', 'Status', 'Terlambat (mnt)', 'Pulang Cepat (mnt)'];
+    const headers = ['Pegawai', 'ID Pegawai', 'ID Cabang', 'Nama Cabang', 'Shift', 'Tanggal', 'Masuk', 'Pulang', 'Status', 'Terlambat (mnt)', 'Pulang Cepat (mnt)'];
     const rows = filtered.map(r => [
       r.employeeName,
       r.employeeId,
       r.branchId,
+      r.branchName,
       r.shiftName,
       r.workDate,
       r.checkInTime || '-',
@@ -154,7 +181,9 @@ export default function AttendanceMonitoring() {
       r.earlyCheckoutMinutes || 0
     ]);
     
-    const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -200,16 +229,26 @@ export default function AttendanceMonitoring() {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-white"
           >
             <option value="">Semua Status</option>
             {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
               <option key={key} value={key}>{cfg.label}</option>
             ))}
           </select>
-          <button className="inline-flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-            <Filter className="h-4 w-4" /> Filter Cabang
-          </button>
+          <div className="flex items-center gap-1.5 border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white text-sm text-gray-600">
+            <Filter className="h-4 w-4 text-gray-400 flex-shrink-0" />
+            <select
+              value={filterBranch}
+              onChange={(e) => setFilterBranch(e.target.value)}
+              className="bg-transparent border-none text-sm text-gray-700 focus:outline-none cursor-pointer"
+            >
+              <option value="">Semua Cabang</option>
+              {branches.map(b => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="overflow-auto max-h-[600px] border-t border-gray-100">
           <table className="min-w-full divide-y divide-gray-200">
@@ -237,7 +276,7 @@ export default function AttendanceMonitoring() {
                       <div className="text-xs text-gray-400">{rec.employeeId}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{rec.branchId}</div>
+                      <div className="text-sm font-medium text-gray-900">{rec.branchName}</div>
                       <div className="text-xs text-gray-400">{rec.shiftName}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">

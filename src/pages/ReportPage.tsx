@@ -101,7 +101,9 @@ export default function ReportPage() {
 
         const isApproved = (status: string = '') => status.toUpperCase() === 'APPROVED';
 
-        const data: ReportRow[] = employees.map(emp => {
+        const validEmployees = employees.filter(emp => !emp.migrated);
+
+        const data: ReportRow[] = validEmployees.map(emp => {
           const empAtts = atts.filter(a => a.employeeId === emp.id);
           const empLeaves = leaveRequests.filter(r => r.employeeId === emp.id && isApproved(r.status));
 
